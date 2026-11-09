@@ -33,7 +33,9 @@ public:
     bool connected() const {
         return connected_;
     }
-    uint64_t capabilities() const { return capabilities_; }
+    uint64_t capabilities() const {
+        return capabilities_;
+    }
     bool simulated() const {
         return bool(core_);
     }
@@ -59,6 +61,7 @@ public:
     flint::Core *simulator() {
         return core_.get();
     }
+    flint::Error simulatorInput(flint::InputEvent event);
     Q_INVOKABLE void startSimulator();
     Q_INVOKABLE void connectUsb(const QString &port);
     Q_INVOKABLE void scanBle();
@@ -75,6 +78,7 @@ signals:
     void ready();
     void disconnected();
     void failure(const QString &message);
+    void simulationSceneChanged();
 
 private:
     struct Pending {
@@ -104,5 +108,6 @@ private:
     void handshake();
     void fail(const QString &message);
     void ensureBle();
+    void scheduleSimulation();
 };
 QString platformError(flint::Error error);

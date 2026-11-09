@@ -6,10 +6,14 @@ Preview::Preview(PlatformClient *client)
     image_.fill(QColor("#080d18"));
     timer_.setInterval(1000);
     connect(&timer_, &QTimer::timeout, this, &Preview::refresh);
+    connect(client, &PlatformClient::simulationSceneChanged, this, [this] {
+        if (pollingActive_ && !busy_)
+            refresh();
+    });
     connect(client, &PlatformClient::ready, this, [this] {
         if (pollingActive_) {
-            timer_.setInterval(client_->simulated() ? 33 : 1000);
-            timer_.start();
+            if (!client_->simulated())
+                timer_.start(1000);
             refresh();
         }
     });
@@ -17,7 +21,7 @@ Preview::Preview(PlatformClient *client)
         timer_.stop();
         busy_ = false;
         active_.clear();
-        runtime_.stop();
+        clearResources();
         image_.fill(QColor("#080d18"));
         ++revision_;
         emit changed();
@@ -41,7 +45,7 @@ void Preview::refresh() {
     active_ = key;
     download_.clear();
     total_ = 0;
-    runtime_.stop();
+    clearResources();
     download();
 }
 void Preview::download() {
@@ -83,12 +87,26 @@ void Preview::download() {
             return;
         }
         file.close();
-        flint::Installed p;
-        p.path = path.toStdString();
-        auto error2 = runtime_.launch(
-            p, active_.section('/', 1, 1).toStdString(), {48 * 1024, 4 * 1024 * 1024, 4096}, client_->capabilities());
+        // A remote preview only loads validated resources. Lua and private state remain on
+        // the watch; replaying its module here would run without its actual Core services.
+        flint::Manifest manifest;
+        auto error2 = resourceFile_.open(path.toStdString())
+            ? resourcePackage_.open(resourceFile_.source())
+            : flint::Error::io_error;
+        if (error2 == flint::Error::ok)
+            error2 = flint::validateApplication(resourcePackage_, manifest,
+                {48 * 1024, 4 * 1024 * 1024, 4096}, client_->capabilities());
+        const auto component = active_.section('/', 1, 1).toStdString();
+        if (error2 == flint::Error::ok &&
+            (manifest.id != active_.section('/', 0, 0).toStdString() ||
+                std::none_of(manifest.components.begin(), manifest.components.end(),
+                    [&](const auto &entry) { return entry.id == component; })))
+            error2 = flint::Error::invalid_package;
+        if (error2 == flint::Error::ok)
+            resources_.bind(&resourcePackage_);
         download_.clear();
         if (error2 != flint::Error::ok) {
+            clearResources();
             busy_ = false;
             active_.clear();
             status_ = platformError(error2);
@@ -99,6 +117,19 @@ void Preview::download() {
     });
 }
 void Preview::scene() {
+    if (auto *core = client_->simulator()) {
+        FlintRender::Scene scene;
+        const auto error = core->scene(scene);
+        busy_ = false;
+        if (error == flint::Error::ok) {
+            paint(scene);
+            status_ = tr("Shared Ignite Renderer");
+            ++revision_;
+        } else
+            status_ = platformError(error);
+        emit changed();
+        return;
+    }
     client_->request(flint::Method::scene, {}, [this](auto error, auto bytes) {
         busy_ = false;
         if (error != flint::Error::ok) {
@@ -108,12 +139,12 @@ void Preview::scene() {
         }
         FlintRender::Scene s;
         if (!FlintRender::decode(bytes.data(), bytes.size(), s)) {
-            status_ = "Некорректная сцена";
+            status_ = tr("Invalid scene");
             emit changed();
             return;
         }
         paint(s);
-        status_ = "Общий Ignite Renderer";
+        status_ = tr("Shared Ignite Renderer");
         ++revision_;
         emit changed();
     });
@@ -124,7 +155,10 @@ void Preview::paint(const FlintRender::Scene &scene) {
     if (auto *core = client_->simulator())
         core->paint(scene, canvas);
     else {
-        FlintRender::resourceContext = &runtime_.resources();
+        FlintRender::resourceContext = &resources_;
+        FlintRender::resourceMetrics = [](void *c, unsigned f, uint32_t cp) {
+            return static_cast<flint::ResourceManager *>(c)->metrics(f, cp);
+        };
         FlintRender::resourceGlyph = [](void *c, unsigned f, uint32_t cp) {
             return static_cast<flint::ResourceManager *>(c)->glyph(f, cp);
         };
@@ -135,6 +169,7 @@ void Preview::paint(const FlintRender::Scene &scene) {
         FlintRender::render(scene, canvas);
         FlintRender::resourceContext = nullptr;
         FlintRender::resourceGlyph = nullptr;
+        FlintRender::resourceMetrics = nullptr;
         FlintRender::resourceImage = nullptr;
     }
     for (int y = 0; y < 240; ++y)
@@ -153,13 +188,74 @@ void Preview::setActive(bool active) {
     if (pollingActive_ == active) {
         return;
     }
+    if (!active)
+        setInputFocus(false);
     pollingActive_ = active;
     if (active && client_->connected()) {
-        timer_.setInterval(client_->simulated() ? 33 : 1000);
-        timer_.start();
+        if (!client_->simulated())
+            timer_.start(1000);
         refresh();
     } else {
         timer_.stop();
     }
     emit changed();
+}
+
+void Preview::clearResources() {
+    resources_.bind(nullptr);
+    resourcePackage_.close();
+    resourceFile_.close();
+    pressedGeneration_ = 0;
+}
+void Preview::setInputFocus(bool focused) {
+    if (!focused)
+        pressedGeneration_ = 0;
+    auto *core = client_->simulator();
+    if (!core || !pollingActive_)
+        return;
+    const auto error = client_->simulatorInput(
+        {focused ? flint::InputKind::focus_gained : flint::InputKind::focus_lost, 0,
+            core->runtime().generation()});
+    // Declarative screens and packages without input.focused legitimately reject focus events.
+    if (error != flint::Error::ok && error != flint::Error::permission_denied &&
+        error != flint::Error::invalid_state) {
+        status_ = platformError(error);
+        emit changed();
+    }
+}
+bool Preview::sendInput(const QString &kind, int value) {
+    auto *core = client_->simulator();
+    if (!core || !pollingActive_)
+        return false;
+    flint::InputKind input;
+    if (kind == "press")
+        input = flint::InputKind::press;
+    else if (kind == "release")
+        input = flint::InputKind::release;
+    else if (kind == "hold")
+        input = flint::InputKind::hold;
+    else if (kind == "rotate")
+        input = flint::InputKind::rotate;
+    else
+        return false;
+    const auto current = core->runtime().generation();
+    if (input == flint::InputKind::press || input == flint::InputKind::rotate)
+        setInputFocus(true);
+    if (input == flint::InputKind::press)
+        pressedGeneration_ = current;
+    const auto generation = input == flint::InputKind::release || input == flint::InputKind::hold
+        ? pressedGeneration_
+        : current;
+    const auto error = client_->simulatorInput({input, value, generation});
+    if (input == flint::InputKind::release)
+        pressedGeneration_ = 0;
+    if (error != flint::Error::ok) {
+        if (error == flint::Error::stale_handle)
+            return false;
+        status_ = error == flint::Error::permission_denied || error == flint::Error::invalid_state
+            ? tr("This application does not accept input.")
+            : platformError(error);
+        emit changed();
+    }
+    return error == flint::Error::ok;
 }

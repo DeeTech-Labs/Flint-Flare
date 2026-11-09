@@ -46,6 +46,41 @@ Rectangle {
             }
         }
         Image {
+            id: screen
+            activeFocusOnTab: card.session.simulated && preview.active
+            onActiveFocusChanged: preview.setInputFocus(activeFocus)
+            Keys.onPressed: event => {
+                if (!card.session.simulated || !preview.active || event.isAutoRepeat) return
+                if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                    preview.sendInput("press", 1)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Up || event.key === Qt.Key_Down) {
+                    preview.sendInput("rotate", event.key === Qt.Key_Up ? 1 : -1)
+                    event.accepted = true
+                }
+            }
+            Keys.onReleased: event => {
+                if (card.session.simulated && preview.active && !event.isAutoRepeat
+                        && (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter)) {
+                    preview.sendInput("release", 0)
+                    event.accepted = true
+                }
+            }
+            MouseArea {
+                anchors.fill: parent
+                enabled: card.session.simulated && preview.active
+                onPressed: { screen.forceActiveFocus(); preview.sendInput("press", 1) }
+                onReleased: preview.sendInput("release", 0)
+                onPressAndHold: preview.sendInput("hold", 1)
+                onCanceled: preview.setInputFocus(false)
+                onWheel: wheel => {
+                    if (wheel.angleDelta.y !== 0) {
+                        screen.forceActiveFocus()
+                        preview.sendInput("rotate", wheel.angleDelta.y > 0 ? 1 : -1)
+                        wheel.accepted = true
+                    }
+                }
+            }
             source: "image://ignite/" + preview.revision
             sourceSize.width: 280
             sourceSize.height: 240
@@ -59,6 +94,11 @@ Rectangle {
         }
         Caption {
             text: preview.status || qsTr("Connect a watch or start the local simulator")
+            Layout.fillWidth: true
+        }
+        Caption {
+            visible: card.session.simulated && !card.compact
+            text: qsTr("Click or press Space to interact. Use Up/Down or the mouse wheel to rotate.")
             Layout.fillWidth: true
         }
         RowLayout {

@@ -1,0 +1,12 @@
+{
+    "contexts": {
+        "Preview": {
+            "Shared Ignite Renderer": "Общий Ignite Renderer",
+            "Invalid scene": "Некорректная сцена",
+            "This application does not accept input.": "Это приложение не принимает ввод."
+        },
+        "WatchPreview": {
+            "Click or press Space to interact. Use Up/Down or the mouse wheel to rotate.": "Нажмите на экран или Пробел. Стрелки вверх/вниз и колесо мыши — поворот."
+        }
+    }
+}
