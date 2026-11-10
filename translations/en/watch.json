@@ -16,7 +16,9 @@
             "Active application": "Active application",
             "Unavailable": "Unavailable",
             "Hide watch settings": "Hide watch settings",
-            "Watch settings": "Watch settings"
+            "Watch settings": "Watch settings",
+            "Bluetooth availability": "Bluetooth availability",
+            "After disabling Bluetooth, reconnect via USB to enable it. Companion consent is separate.": "After disabling Bluetooth, reconnect via USB to enable it. Companion consent is separate."
         },
         "WatchControls": {
             "Restore factory components?": "Restore factory components?",

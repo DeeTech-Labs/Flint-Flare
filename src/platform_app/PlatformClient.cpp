@@ -29,6 +29,7 @@ PlatformClient::PlatformClient(QObject *parent) : QObject(parent) {
     connect(&simulationTick_, &QTimer::timeout, this, [this] {
         if (core_ && core_->tick())
             emit simulationSceneChanged();
+        drainSimulationEvents();
         scheduleSimulation();
     });
     pairingPoll_.setInterval(1000);
@@ -36,13 +37,34 @@ PlatformClient::PlatformClient(QObject *parent) : QObject(parent) {
         if (serial_.isOpen())
             pairing("status");
     });
+    installTimeout_.setSingleShot(true);
+    installTimeout_.setInterval(45000);
+    connect(&installTimeout_, &QTimer::timeout, this, [this] {
+        ++timeouts_;
+        fail(tr("Package verification timed out"));
+    });
+    closeTimeout_.setSingleShot(true);
+    closeTimeout_.setInterval(100);
+    connect(&closeTimeout_, &QTimer::timeout, this, [this] {
+        if (!closing_)
+            return;
+        ++closeTimeouts_;
+        finishDisconnect();
+    });
     timeout_.setSingleShot(true);
     timeout_.setInterval(45000);
-    connect(&timeout_, &QTimer::timeout, this, [this] { fail("Устройство не ответило вовремя"); });
-    connect(&serial_, &QSerialPort::readyRead, this, [this] { receive(serial_.readAll()); });
+    connect(&timeout_, &QTimer::timeout, this, [this] {
+        ++timeouts_;
+        fail("Устройство не ответило вовремя");
+    });
+    connect(&serial_, &QSerialPort::readyRead, this, [this] { receive(serial_.readAll(), true); });
     connect(&serial_, &QSerialPort::errorOccurred, this, [this](auto error) {
-        if (error == QSerialPort::ResourceError)
-            fail(serial_.errorString());
+        if (error == QSerialPort::ResourceError) {
+            if (closing_)
+                finishDisconnect();
+            else
+                fail(serial_.errorString());
+        }
     });
 }
 QVariantList PlatformClient::ports() const {
@@ -64,44 +86,112 @@ void PlatformClient::ensureBle() {
     ble_ = std::make_unique<BleTransport>();
     connect(ble_.get(), &BleTransport::devicesChanged, this, &PlatformClient::changed);
     connect(ble_.get(), &BleTransport::pairingCodeChanged, this, &PlatformClient::changed);
-    connect(ble_.get(), &BleTransport::received, this, &PlatformClient::receive);
+    connect(ble_.get(), &BleTransport::received, this,
+        [this](const QByteArray &bytes) { receive(bytes); });
     connect(ble_.get(), &BleTransport::error, this, &PlatformClient::fail);
+    connect(ble_.get(), &BleTransport::writable, this, &PlatformClient::sendNext);
     connect(ble_.get(), &BleTransport::readyChanged, this, [this] {
         if (ble_->ready())
             handshake();
     });
 }
 void PlatformClient::disconnectDevice() {
+    resetConnection();
+}
+void PlatformClient::resetConnection(std::function<void()> afterClose) {
+    afterClose_ = std::move(afterClose);
+    if (closing_)
+        return;
+    const bool graceful = serial_.isOpen() && (capabilities_ & flint::CapSessionClose);
+    closing_ = true;
     ++generation_;
     simulationTick_.stop();
     pairingPoll_.stop();
     watchPairingCode_.clear();
     timeout_.stop();
+    installTimeout_.stop();
     connected_ = false;
+    blePolicyKnown_ = blePolicyBusy_ = false;
     capabilities_ = 0;
     if (core_)
         core_->disconnect(session_);
     queue_.clear();
     pending_.reset();
+    installPending_.reset();
+    if (ble_)
+        ble_->close();
+    parser_.reset();
+    usbParser_.reset();
+    info_.clear();
+    status_ = graceful ? tr("Disconnecting…") : QString::fromUtf8("Отключено");
+    emit disconnected();
+    emit changed();
+    if (!graceful) {
+        finishDisconnect();
+        return;
+    }
+    if (++nextId_ == 0)
+        ++nextId_;
+    closeId_ = nextId_;
+    const auto bytes = flint::encodeFrame({flint::Method::session_close, closeId_, false, {}});
+    if (serial_.write(reinterpret_cast<const char *>(bytes.data()), bytes.size()) !=
+        qint64(bytes.size())) {
+        finishDisconnect();
+        return;
+    }
+    closeTimeout_.start();
+}
+void PlatformClient::finishDisconnect() {
+    if (finishingDisconnect_)
+        return;
+    finishingDisconnect_ = true;
+    closeTimeout_.stop();
     serial_.close();
     if (ble_)
         ble_->close();
     core_.reset();
     simulation_.reset();
     parser_.reset();
-    info_.clear();
+    usbParser_.reset();
     status_ = "Отключено";
-    emit disconnected();
+    closing_ = finishingDisconnect_ = false;
+    auto continuation = std::move(afterClose_);
+    afterClose_ = {};
+    const auto generation = generation_;
     emit changed();
+    if (continuation && generation == generation_)
+        continuation();
 }
 void PlatformClient::fail(const QString &message) {
-    disconnectDevice();
+    if (finishingDisconnect_)
+        return;
+    afterClose_ = {};
+    closing_ = true;
+    ++generation_;
+    simulationTick_.stop();
+    pairingPoll_.stop();
+    watchPairingCode_.clear();
+    timeout_.stop();
+    installTimeout_.stop();
+    connected_ = false;
+    blePolicyKnown_ = blePolicyBusy_ = false;
+    capabilities_ = 0;
+    queue_.clear();
+    pending_.reset();
+    installPending_.reset();
+    info_.clear();
+    if (core_)
+        core_->disconnect(session_);
+    finishDisconnect();
     status_ = message;
+    emit disconnected();
     emit changed();
     emit failure(message);
 }
 void PlatformClient::connectUsb(const QString &port) {
-    disconnectDevice();
+    resetConnection([this, port] { openUsb(port); });
+}
+void PlatformClient::openUsb(const QString &port) {
     serial_.setPortName(port);
     serial_.setBaudRate(115200);
     if (!serial_.open(QIODevice::ReadWrite)) {
@@ -116,18 +206,31 @@ void PlatformClient::scanBle() {
     emit changed();
 }
 void PlatformClient::connectBle(const QString &address) {
+    if (closing_) {
+        afterClose_ = [this, address] { connectBle(address); };
+        return;
+    }
     if (serial_.isOpen()) {
+        ++generation_;
         // Retain the authenticated local USB channel for numeric comparison.
         timeout_.stop();
+        installTimeout_.stop();
         connected_ = false;
+        blePolicyKnown_ = blePolicyBusy_ = false;
         queue_.clear();
         pending_.reset();
+        installPending_.reset();
         parser_.reset();
+        usbParser_.reset();
         info_.clear();
         emit disconnected();
     } else {
-        disconnectDevice();
+        resetConnection([this, address] { openBle(address); });
+        return;
     }
+    openBle(address);
+}
+void PlatformClient::openBle(const QString &address) {
     ensureBle();
     ble_->open(address);
     status_ = "Подключение BLE…";
@@ -166,7 +269,9 @@ void PlatformClient::pairing(const QString &action) {
     });
 }
 void PlatformClient::startSimulator() {
-    disconnectDevice();
+    resetConnection([this] { startSimulatorNow(); });
+}
+void PlatformClient::startSimulatorNow() {
     simulation_ = std::make_unique<QTemporaryDir>();
     auto root = simulation_->path();
     QDir().mkpath(root + "/packages");
@@ -217,68 +322,168 @@ void PlatformClient::handshake() {
         status_ = core_ ? "Локальный симулятор" : "Подключено";
         emit changed();
         refreshInfo();
+        if (caps & flint::CapBlePolicy)
+            refreshBlePolicy();
         emit ready();
         if (autoSyncTime())
             syncTime();
     });
 }
 void PlatformClient::request(flint::Method method, flint::Bytes payload, Callback callback) {
+    if (closing_) {
+        callback(flint::Error::cancelled, {});
+        return;
+    }
     if (!core_ && !serial_.isOpen() && !(ble_ && ble_->ready())) {
         callback(flint::Error::source_unavailable, {});
         return;
     }
-    if (queue_.size() > 64) {
+    if (method == flint::Method::companion_sample) {
+        // Samples have no value after a newer sample or demand generation arrives.
+        std::erase_if(queue_, [](const auto &entry) {
+            return entry.frame.method == flint::Method::companion_sample;
+        });
+    }
+    if (queue_.size() >= 64) {
+        ++queueRejected_;
         callback(flint::Error::quota_exceeded, {});
         return;
     }
     if (++nextId_ == 0)
         ++nextId_;
-    queue_.push_back({{method, nextId_, false, std::move(payload)}, std::move(callback)});
+    ++requests_;
+    Pending entry{{method, nextId_, false, std::move(payload)},
+        [this, generation = generation_, callback = std::move(callback)](auto error, auto data) {
+            if (generation == generation_)
+                callback(error, std::move(data));
+        },
+        monotonic()};
+    if (method == flint::Method::companion_sample)
+        queue_.push_back(std::move(entry));
+    else {
+        const auto sample = std::find_if(queue_.begin(), queue_.end(), [](const auto &queued) {
+            return queued.frame.method == flint::Method::companion_sample;
+        });
+        queue_.insert(sample, std::move(entry));
+    }
+    queuePeak_ = std::max<uint64_t>(queuePeak_, queue_.size());
     sendNext();
 }
 void PlatformClient::sendNext() {
-    if (pending_ || queue_.empty())
+    if (closing_ || pending_ || queue_.empty())
         return;
-    pending_ = std::make_unique<Pending>(std::move(queue_.front()));
+    const auto method = queue_.front().frame.method;
+    const bool usb =
+        serial_.isOpen() && (method == flint::Method::pairing || !(ble_ && ble_->ready()));
+    if (!core_ && !usb && ble_ && !ble_->canWrite())
+        return;
+    if (method == flint::Method::install_commit && installPending_) {
+        auto rejected = std::move(queue_.front());
+        queue_.pop_front();
+        ++queueRejected_;
+        rejected.callback(flint::Error::invalid_state, {});
+        QTimer::singleShot(0, this, [this] { sendNext(); });
+        return;
+    }
+    auto next = std::make_unique<Pending>(std::move(queue_.front()));
     queue_.pop_front();
-    auto wire = flint::encodeFrame(pending_->frame);
+    next->sentAt = monotonic();
+    maxQueueMs_ = std::max(maxQueueMs_, next->sentAt - next->queuedAt);
+    const auto wire = flint::encodeFrame(next->frame);
     if (wire.empty()) {
         fail("Запрос превышает лимит протокола");
         return;
     }
-    timeout_.start();
+    const auto id = next->frame.id;
+    if (method == flint::Method::install_commit) {
+        installPending_ = std::move(next);
+        installTimeout_.start();
+    } else {
+        pending_ = std::move(next);
+        timeout_.start();
+    }
+    txBytes_ += wire.size();
     if (core_) {
-        QTimer::singleShot(
-            0, this, [this, wire, generation = generation_, id = pending_->frame.id] {
-                if (generation != generation_ || !core_ || !pending_ || pending_->frame.id != id)
-                    return;
-                flint::FrameParser parser;
-                parser.feed(wire, [this](flint::Frame frame) {
-                    auto reply = flint::encodeFrame(core_->handle(frame, session_));
+        QTimer::singleShot(0, this, [this, wire, generation = generation_, id] {
+            const bool expected = (pending_ && pending_->frame.id == id) ||
+                (installPending_ && installPending_->frame.id == id);
+            if (generation != generation_ || !core_ || !expected)
+                return;
+            flint::FrameParser parser;
+            parser.feed(wire, [this](flint::Frame frame) {
+                if (auto result = core_->process(frame, session_)) {
+                    const auto reply = flint::encodeFrame(*result);
                     receive(QByteArray(reinterpret_cast<const char *>(reply.data()), reply.size()));
-                    scheduleSimulation();
-                });
+                }
+                drainSimulationEvents();
+                scheduleSimulation();
             });
-    } else if (serial_.isOpen() &&
-        (pending_->frame.method == flint::Method::pairing || !(ble_ && ble_->ready()))) {
+        });
+    } else if (usb) {
         if (serial_.write(reinterpret_cast<const char *>(wire.data()), wire.size()) !=
             qint64(wire.size())) {
             fail("Не удалось отправить USB-пакет");
+            return;
         }
-    } else if (!ble_->write(QByteArray(reinterpret_cast<const char *>(wire.data()), wire.size()))) {
+    } else if (!ble_ ||
+        !ble_->write(QByteArray(reinterpret_cast<const char *>(wire.data()), wire.size()))) {
         fail("Не удалось отправить BLE-пакет");
+        return;
     }
+    if (method == flint::Method::install_commit)
+        QTimer::singleShot(0, this, [this] { sendNext(); });
 }
-void PlatformClient::receive(const QByteArray &bytes) {
-    parser_.feed({reinterpret_cast<const uint8_t *>(bytes.data()), size_t(bytes.size())},
-        [this](flint::Frame frame) {
-            if (!pending_ || !frame.reply || frame.id != pending_->frame.id ||
-                frame.method != pending_->frame.method)
+void PlatformClient::receive(const QByteArray &bytes, bool usb) {
+    rxBytes_ += bytes.size();
+    auto &parser = usb ? usbParser_ : parser_;
+    parser.feed({reinterpret_cast<const uint8_t *>(bytes.data()), size_t(bytes.size())},
+        [this, usb](flint::Frame frame) {
+            if (closing_) {
+                if (usb && frame.reply && frame.id == closeId_ &&
+                    frame.method == flint::Method::session_close) {
+                    if (frame.payload.size() >= 2 && flint::u16(frame.payload.data()) == 0)
+                        ++closeConfirmed_;
+                    finishDisconnect();
+                }
                 return;
-            timeout_.stop();
-            auto done = std::move(pending_);
+            }
+            if (flint::isCompanionEvent(frame)) {
+                if (usb && ble_ && ble_->ready())
+                    return;
+                if (!connected_ || !(capabilities_ & flint::CapCompanionDemand))
+                    return;
+                flint::Reader event{frame.payload};
+                const auto version = event.n(2), kind = event.n(1), generation = event.n(8),
+                           state = event.n(1);
+                event.n(8); // The SDK owns the consumer identity.
+                const auto interval = event.n(), ttl = event.n();
+                if (!event.done() || version != flint::CompanionDemandVersion || kind != 1 ||
+                    !generation || state > 2 || interval < 1000 || interval > 60000 ||
+                    ttl < interval) {
+                    fail(tr("Invalid Companion state."));
+                    return;
+                }
+                emit companionState(generation, int(state), int(interval));
+                return;
+            }
+            if (!frame.reply)
+                return;
+            std::unique_ptr<Pending> done;
+            if (installPending_ && frame.id == installPending_->frame.id &&
+                frame.method == installPending_->frame.method) {
+                installTimeout_.stop();
+                done = std::move(installPending_);
+            } else if (pending_ && frame.id == pending_->frame.id &&
+                frame.method == pending_->frame.method) {
+                timeout_.stop();
+                done = std::move(pending_);
+            } else
+                return;
+            maxRequestMs_ = std::max(maxRequestMs_, monotonic() - done->sentAt);
             flint::Reader r{frame.payload};
             auto error = flint::Error(r.n(2));
+            if (error != flint::Error::ok)
+                ++requestErrors_;
             if (!r.valid) {
                 fail("Повреждённый ответ");
                 return;
@@ -287,6 +492,15 @@ void PlatformClient::receive(const QByteArray &bytes) {
             done->callback(error, std::move(data));
             QTimer::singleShot(0, this, [this] { sendNext(); });
         });
+}
+QVariantMap PlatformClient::diagnostics() const {
+    return {{"session_close_confirmed", qulonglong(closeConfirmed_)},
+        {"session_close_timeouts", qulonglong(closeTimeouts_)}, {"requests", qulonglong(requests_)},
+        {"request_errors", qulonglong(requestErrors_)}, {"queue_depth", qulonglong(queue_.size())},
+        {"queue_peak", qulonglong(queuePeak_)}, {"queue_rejected", qulonglong(queueRejected_)},
+        {"rx_bytes", qulonglong(rxBytes_)}, {"tx_bytes", qulonglong(txBytes_)},
+        {"timeouts", qulonglong(timeouts_)}, {"max_queue_ms", qulonglong(maxQueueMs_)},
+        {"max_request_ms", qulonglong(maxRequestMs_)}};
 }
 void PlatformClient::refreshInfo() {
     request(flint::Method::info, {}, [this](auto error, auto data) {
@@ -310,6 +524,53 @@ void PlatformClient::refreshInfo() {
             return;
         }
         info_ = info;
+        emit changed();
+    });
+}
+void PlatformClient::refreshBlePolicy() {
+    request(flint::Method::settings_get, {}, [this](auto error, auto data) {
+        if (error != flint::Error::ok) {
+            emit failure(platformError(error));
+            return;
+        }
+        flint::Reader reader{data};
+        const auto count = reader.n(2);
+        if (count > 128) {
+            emit failure(tr("Invalid device settings"));
+            return;
+        }
+        bool enabled = true;
+        for (unsigned i = 0; i < count && reader.valid; ++i) {
+            const auto key = reader.text(64), value = reader.text(192);
+            if (key == "ble_enabled") {
+                if (value != "0" && value != "1")
+                    reader.valid = false;
+                enabled = value == "1";
+            }
+        }
+        if (!reader.done()) {
+            emit failure(tr("Invalid device settings"));
+            return;
+        }
+        bleEnabled_ = enabled;
+        blePolicyKnown_ = true;
+        emit changed();
+    });
+}
+void PlatformClient::setBleEnabled(bool enabled) {
+    if (!blePolicySupported() || !blePolicyKnown_ || blePolicyBusy_)
+        return;
+    flint::Writer writer;
+    writer.text("ble_enabled");
+    writer.text(enabled ? "1" : "0");
+    blePolicyBusy_ = true;
+    emit changed();
+    request(flint::Method::settings_set, writer.data, [this, enabled](auto error, auto) {
+        blePolicyBusy_ = false;
+        if (error != flint::Error::ok)
+            emit failure(platformError(error));
+        else
+            bleEnabled_ = enabled;
         emit changed();
     });
 }
@@ -354,7 +615,7 @@ void PlatformClient::scheduleSimulation() {
         simulationTick_.stop();
         return;
     }
-    const auto deadline = core_->nextWake();
+    const auto deadline = std::min(core_->nextWake(), core_->companionNextWake(session_));
     if (deadline == UINT64_MAX) {
         simulationTick_.stop();
         return;
@@ -372,4 +633,25 @@ flint::Error PlatformClient::simulatorInput(flint::InputEvent event) {
     if (error == flint::Error::ok)
         scheduleSimulation();
     return error;
+}
+void PlatformClient::discardCompanionSamples() {
+    std::erase_if(queue_, [](const auto &entry) {
+        return entry.frame.method == flint::Method::companion_sample ||
+            entry.frame.method == flint::Method::companion_bind;
+    });
+}
+void PlatformClient::drainSimulationEvents() {
+    if (!core_)
+        return;
+    flint::Frame event;
+    if (core_->takeReply(session_, event)) {
+        const auto bytes = flint::encodeFrame(event);
+        receive(QByteArray(reinterpret_cast<const char *>(bytes.data()), bytes.size()));
+        if (!core_)
+            return;
+    }
+    if (core_->takeCompanionEvent(session_, event)) {
+        const auto bytes = flint::encodeFrame(event);
+        receive(QByteArray(reinterpret_cast<const char *>(bytes.data()), bytes.size()));
+    }
 }

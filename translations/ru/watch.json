@@ -16,7 +16,9 @@
             "Active application": "Активное приложение",
             "Unavailable": "Нет данных",
             "Hide watch settings": "Скрыть настройки часов",
-            "Watch settings": "Настройки часов"
+            "Watch settings": "Настройки часов",
+            "Bluetooth availability": "Доступность Bluetooth",
+            "After disabling Bluetooth, reconnect via USB to enable it. Companion consent is separate.": "После отключения Bluetooth подключите USB, чтобы включить его. Согласие Companion задаётся отдельно."
         },
         "WatchControls": {
             "Restore factory components?": "Вернуть заводские компоненты?",

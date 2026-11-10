@@ -193,6 +193,25 @@ AppPage {
                 iconName: page.settingsExpanded ? "down" : "settings"
                 onClicked: page.settingsExpanded = !page.settingsExpanded
             }
+            AppCard {
+                Layout.fillWidth: true
+                visible: page.settingsExpanded && page.session.blePolicySupported
+                implicitHeight: radioSettings.implicitHeight + topPadding + bottomPadding
+                ColumnLayout {
+                    id: radioSettings
+                    anchors.fill: parent
+                    AppSwitch {
+                        text: qsTr("Bluetooth availability")
+                        checked: page.session.bleEnabled
+                        enabled: page.session.blePolicyKnown && !page.session.blePolicyBusy
+                        onToggled: page.session.setBleEnabled(checked)
+                    }
+                    Caption {
+                        Layout.fillWidth: true
+                        text: qsTr("After disabling Bluetooth, reconnect via USB to enable it. Companion consent is separate.")
+                    }
+                }
+            }
             Loader {
                 Layout.fillWidth: true
                 active: page.settingsExpanded

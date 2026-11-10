@@ -28,6 +28,9 @@
             "Waiting for watch confirmation…": "Waiting for watch confirmation…",
             "Cannot send to watch": "Cannot send to watch",
             "Cannot read Ignit (limit 4 KB)": "Cannot read Ignit (limit 4 KB)"
+        },
+        "IgniteHub": {
+            "Verifying and activating package…": "Verifying and activating package…"
         }
     }
 }

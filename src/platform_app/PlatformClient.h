@@ -10,6 +10,10 @@
 #include <memory>
 class PlatformClient : public QObject {
     Q_OBJECT
+    Q_PROPERTY(bool blePolicySupported READ blePolicySupported NOTIFY changed)
+    Q_PROPERTY(bool blePolicyKnown READ blePolicyKnown NOTIFY changed)
+    Q_PROPERTY(bool blePolicyBusy READ blePolicyBusy NOTIFY changed)
+    Q_PROPERTY(bool bleEnabled READ bleEnabled NOTIFY changed)
     Q_PROPERTY(bool autoSyncTime READ autoSyncTime WRITE setAutoSyncTime NOTIFY changed)
     Q_PROPERTY(bool connecting READ connecting NOTIFY changed)
     Q_PROPERTY(bool connected READ connected NOTIFY changed)
@@ -25,10 +29,23 @@ class PlatformClient : public QObject {
 public:
     using Callback = std::function<void(flint::Error, flint::Bytes)>;
     explicit PlatformClient(QObject *parent = nullptr);
+    bool blePolicySupported() const {
+        return connected_ && (capabilities_ & flint::CapBlePolicy);
+    }
+    bool blePolicyKnown() const {
+        return blePolicyKnown_;
+    }
+    bool blePolicyBusy() const {
+        return blePolicyBusy_;
+    }
+    bool bleEnabled() const {
+        return bleEnabled_;
+    }
+    Q_INVOKABLE void setBleEnabled(bool enabled);
     bool autoSyncTime() const;
     void setAutoSyncTime(bool enabled);
     bool connecting() const {
-        return !connected_ && (serial_.isOpen() || (ble_ && ble_->active()));
+        return !closing_ && !connected_ && (serial_.isOpen() || (ble_ && ble_->active()));
     }
     bool connected() const {
         return connected_;
@@ -55,9 +72,11 @@ public:
         return watchPairingCode_;
     }
     bool localTrustChannel() const {
-        return serial_.isOpen();
+        return !closing_ && serial_.isOpen();
     }
     void request(flint::Method method, flint::Bytes payload, Callback callback);
+    void discardCompanionSamples();
+    Q_INVOKABLE QVariantMap diagnostics() const;
     flint::Core *simulator() {
         return core_.get();
     }
@@ -79,24 +98,41 @@ signals:
     void disconnected();
     void failure(const QString &message);
     void simulationSceneChanged();
+    void companionState(qulonglong generation, int state, int intervalMs);
 
 private:
+    friend struct PlatformClientTestAccess;
     struct Pending {
         flint::Frame frame;
         Callback callback;
+        uint64_t queuedAt{};
+        uint64_t sentAt{};
     };
+    void refreshBlePolicy();
+    bool bleEnabled_{}, blePolicyKnown_{}, blePolicyBusy_{};
     QSerialPort serial_;
     std::unique_ptr<BleTransport> ble_;
     QTimer timeout_;
     QTimer pairingPoll_;
     QTimer simulationTick_;
+    QTimer closeTimeout_;
+    QTimer installTimeout_;
+    std::function<void()> afterClose_;
+    bool closing_{};
+    bool finishingDisconnect_{};
+    uint32_t closeId_{};
+    uint64_t closeConfirmed_{}, closeTimeouts_{};
     QString watchPairingCode_;
     flint::FrameParser parser_;
+    flint::FrameParser usbParser_;
     std::deque<Pending> queue_;
     std::unique_ptr<Pending> pending_;
+    std::unique_ptr<Pending> installPending_;
     uint32_t nextId_{};
     uint64_t generation_{};
     uint64_t capabilities_{};
+    uint64_t requests_{}, requestErrors_{}, queueRejected_{}, queuePeak_{}, rxBytes_{}, txBytes_{},
+        timeouts_{}, maxQueueMs_{}, maxRequestMs_{};
     std::unique_ptr<flint::Core> core_;
     std::unique_ptr<QTemporaryDir> simulation_;
     flint::Session session_{true, false, 1};
@@ -104,10 +140,16 @@ private:
     QString status_{"Отключено"};
     QVariantMap info_;
     void sendNext();
-    void receive(const QByteArray &bytes);
+    void receive(const QByteArray &bytes, bool usb = false);
     void handshake();
     void fail(const QString &message);
     void ensureBle();
     void scheduleSimulation();
+    void drainSimulationEvents();
+    void resetConnection(std::function<void()> afterClose = {});
+    void finishDisconnect();
+    void startSimulatorNow();
+    void openUsb(const QString &port);
+    void openBle(const QString &address);
 };
 QString platformError(flint::Error error);

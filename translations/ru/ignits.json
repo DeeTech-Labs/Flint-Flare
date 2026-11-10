@@ -28,6 +28,9 @@
             "Waiting for watch confirmation…": "Ожидание подтверждения часов…",
             "Cannot send to watch": "Не удалось отправить на часы",
             "Cannot read Ignit (limit 4 KB)": "Не удалось прочитать игнит (не более 4 КБ)"
+        },
+        "IgniteHub": {
+            "Verifying and activating package…": "Проверка и активация пакета…"
         }
     }
 }

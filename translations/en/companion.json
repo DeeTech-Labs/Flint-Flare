@@ -176,6 +176,20 @@
         "BackgroundAgent": {
             "Open Flint Flare": "Open Flint Flare",
             "Quit": "Quit"
+        },
+        "CompanionService": {
+            "CPU/RAM sharing is off": "CPU/RAM sharing is off",
+            "Device disconnected": "Device disconnected",
+            "Device does not support Companion demand": "Device does not support Companion demand",
+            "CPU/RAM source is supported on Linux": "CPU/RAM source is supported on Linux",
+            "Ignite has no CPU/RAM permission": "Ignite has no CPU/RAM permission",
+            "Waiting for a consumer": "Waiting for a consumer",
+            "CPU/RAM sharing is active": "CPU/RAM sharing is active",
+            "Preparing CPU/RAM source": "Preparing CPU/RAM source",
+            "CPU/RAM source unavailable": "CPU/RAM source unavailable"
+        },
+        "PlatformClient": {
+            "Invalid Companion state.": "Invalid Companion state."
         }
     }
 }

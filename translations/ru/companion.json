@@ -176,6 +176,20 @@
         "BackgroundAgent": {
             "Open Flint Flare": "Открыть Flint Flare",
             "Quit": "Выйти"
+        },
+        "CompanionService": {
+            "CPU/RAM sharing is off": "Передача CPU/RAM выключена",
+            "Device disconnected": "Устройство отключено",
+            "Device does not support Companion demand": "Устройство не поддерживает Companion по потребности",
+            "CPU/RAM source is supported on Linux": "Сбор CPU/RAM поддерживается на Linux",
+            "Ignite has no CPU/RAM permission": "Ignite не получил право CPU/RAM",
+            "Waiting for a consumer": "Ожидание потребителя",
+            "CPU/RAM sharing is active": "Передача CPU/RAM активна",
+            "Preparing CPU/RAM source": "Подготовка источника CPU/RAM",
+            "CPU/RAM source unavailable": "Источник CPU/RAM недоступен"
+        },
+        "PlatformClient": {
+            "Invalid Companion state.": "Некорректное состояние Companion."
         }
     }
 }
