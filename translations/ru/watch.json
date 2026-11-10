@@ -1,0 +1,41 @@
+{
+    "contexts": {
+        "WatchSettingsPage": {
+            "Connecting to your watch…": "Подключаем часы…",
+            "No watch connected": "Часы не подключены",
+            "Connect your FlinT watch to see its information, available storage and active application.": "Подключите часы FlinT, чтобы увидеть сведения об устройстве, свободное место и активное приложение.",
+            "View connection": "Открыть подключение",
+            "Connect your watch": "Подключить часы",
+            "USB or Bluetooth": "USB или Bluetooth",
+            "Local simulator": "Локальный симулятор",
+            "My FlinT watch": "Мои часы FlinT",
+            "Simulated device · no physical watch connected": "Симулятор · реальные часы не подключены",
+            "Connected via %1": "Подключено по %1",
+            "Refresh information": "Обновить сведения",
+            "Connection": "Подключение",
+            "Active application": "Активное приложение",
+            "Unavailable": "Нет данных",
+            "Hide watch settings": "Скрыть настройки часов",
+            "Watch settings": "Настройки часов"
+        },
+        "WatchControls": {
+            "Restore factory components?": "Вернуть заводские компоненты?",
+            "This will restore the watch’s factory components. Continue?": "Будут восстановлены заводские компоненты часов. Продолжить?",
+            "Time and display": "Время и экран",
+            "Set the UTC offset in minutes. Clock, theme and language are provided by Ignite packages.": "Укажите смещение UTC в минутах. Часы, тему и язык предоставляют пакеты Ignite.",
+            "UTC offset, minutes": "Смещение UTC, минуты",
+            "Apply to watch": "Применить к часам",
+            "Sync time": "Синхронизировать",
+            "Restore factory components": "Вернуть заводские компоненты"
+        },
+        "DeviceInfoCard": {
+            "Unavailable": "Нет данных",
+            "%1 B": "%1 Б",
+            "%1 KiB": "%1 КиБ",
+            "%1 MiB": "%1 МиБ",
+            "Device profile": "Профиль устройства",
+            "External RAM budget": "Бюджет внешней RAM",
+            "Build: %1": "Сборка: %1"
+        }
+    }
+}

@@ -9,7 +9,6 @@ AppPage {
     required property var presentation
     DeviceInfoCard {
         session: page.session
-        presentation: page.presentation
         Layout.fillWidth: true
     }
     WatchPreview {

@@ -39,21 +39,11 @@ Button {
             verticalAlignment: Text.AlignVCenter
         }
     }
-    background: Rectangle {
+    background: MetalSurface {
         radius: 9
-        Behavior on color {
-            ColorAnimation {
-                duration: Theme.animationDuration
-            }
-        }
-        Behavior on border.color {
-            ColorAnimation {
-                duration: Theme.animationDuration
-            }
-        }
-        border.width: 1
-        border.color: action.visualFocus ? Theme.accent : action.primary ? Theme.accent : "transparent"
-        color: action.primary ? (action.down ? Theme.primaryPressed : action.hovered ? Theme.primaryHover : Theme.accent) : (action.down ? Theme.navSelected : action.hovered ? Theme.buttonHover : Theme.button)
+        edgeColor: action.visualFocus ? Theme.accent : action.primary ? Qt.darker(Theme.accent, 1.18) : Theme.metalEdge
+        tone: action.primary ? (action.down ? Theme.primaryPressed : action.hovered ? Theme.primaryHover : Theme.accent) : (action.down ? Theme.metric : action.hovered ? Theme.buttonHover : Theme.button)
+        pressed: action.down
         opacity: action.enabled ? 1 : 0.6
     }
 }

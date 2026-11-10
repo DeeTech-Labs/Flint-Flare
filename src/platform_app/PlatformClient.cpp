@@ -8,6 +8,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <chrono>
+#include <limits>
 static uint64_t monotonic() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now().time_since_epoch())
@@ -23,11 +24,13 @@ QString platformError(flint::Error e) {
     return QString::fromUtf8(i < std::size(names) ? names[i] : "Ошибка протокола");
 }
 PlatformClient::PlatformClient(QObject *parent) : QObject(parent) {
-    simulationTick_.setInterval(33);
+    simulationTick_.setSingleShot(true);
+    simulationTick_.setTimerType(Qt::PreciseTimer);
     connect(&simulationTick_, &QTimer::timeout, this, [this] {
-        if (core_) core_->tick();
+        if (core_ && core_->tick())
+            emit simulationSceneChanged();
+        scheduleSimulation();
     });
-    simulationTick_.start();
     pairingPoll_.setInterval(1000);
     connect(&pairingPoll_, &QTimer::timeout, this, [this] {
         if (serial_.isOpen())
@@ -70,6 +73,7 @@ void PlatformClient::ensureBle() {
 }
 void PlatformClient::disconnectDevice() {
     ++generation_;
+    simulationTick_.stop();
     pairingPoll_.stop();
     watchPairingCode_.clear();
     timeout_.stop();
@@ -252,6 +256,7 @@ void PlatformClient::sendNext() {
                 parser.feed(wire, [this](flint::Frame frame) {
                     auto reply = flint::encodeFrame(core_->handle(frame, session_));
                     receive(QByteArray(reinterpret_cast<const char *>(reply.data()), reply.size()));
+                    scheduleSimulation();
                 });
             });
     } else if (serial_.isOpen() &&
@@ -342,4 +347,29 @@ bool PlatformClient::autoSyncTime() const {
 void PlatformClient::setAutoSyncTime(bool enabled) {
     QSettings().setValue("connection/autoSyncTime", enabled);
     emit changed();
+}
+
+void PlatformClient::scheduleSimulation() {
+    if (!core_) {
+        simulationTick_.stop();
+        return;
+    }
+    const auto deadline = core_->nextWake();
+    if (deadline == UINT64_MAX) {
+        simulationTick_.stop();
+        return;
+    }
+    const auto at = monotonic();
+    const auto delay =
+        deadline <= at ? 0 : std::min<uint64_t>(deadline - at, std::numeric_limits<int>::max());
+    simulationTick_.start(int(delay));
+}
+flint::Error PlatformClient::simulatorInput(flint::InputEvent event) {
+    // Interactive preview never injects input into a connected physical watch.
+    if (!core_ || !connected_)
+        return flint::Error::not_supported;
+    const auto error = core_->postInput(event);
+    if (error == flint::Error::ok)
+        scheduleSimulation();
+    return error;
 }

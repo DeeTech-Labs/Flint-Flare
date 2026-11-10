@@ -1,0 +1,12 @@
+{
+    "contexts": {
+        "Preview": {
+            "Shared Ignite Renderer": "Shared Ignite Renderer",
+            "Invalid scene": "Invalid scene",
+            "This application does not accept input.": "This application does not accept input."
+        },
+        "WatchPreview": {
+            "Click or press Space to interact. Use Up/Down or the mouse wheel to rotate.": "Click or press Space to interact. Use Up/Down or the mouse wheel to rotate."
+        }
+    }
+}

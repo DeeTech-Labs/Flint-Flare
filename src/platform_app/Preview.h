@@ -23,6 +23,8 @@ public:
         return image_;
     }
     Q_INVOKABLE void refresh();
+    Q_INVOKABLE bool sendInput(const QString &kind, int value = 0);
+    Q_INVOKABLE void setInputFocus(bool focused);
     Q_INVOKABLE bool capture(const QUrl &url);
 signals:
     void changed();
@@ -39,7 +41,11 @@ private:
     flint::Bytes download_;
     uint32_t total_{};
     std::unique_ptr<QTemporaryDir> cache_;
-    flint::Runtime runtime_;
+    flint::File resourceFile_;
+    flint::Package resourcePackage_;
+    flint::ResourceManager resources_;
+    uint64_t pressedGeneration_{};
+    void clearResources();
     void scene();
     void download();
     void paint(const FlintRender::Scene &scene);

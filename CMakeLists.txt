@@ -66,3 +66,28 @@ install(FILES LICENSE NOTICE DESTINATION ${CMAKE_INSTALL_DATADIR}/FlintFlare)
 install(DIRECTORY docs DESTINATION ${CMAKE_INSTALL_DATADIR}/FlintFlare
     FILES_MATCHING PATTERN "*.md" PATTERN "*.txt")
 install(FILES assets/fonts/OFL.txt DESTINATION ${CMAKE_INSTALL_DATADIR}/FlintFlare/third_party/Lato)
+
+if(BUILD_TESTING AND FLINT_ENABLE_LUA)
+    qt_add_executable(preview_input_tests
+        tests/preview_input.cpp
+        src/platform_app/PlatformClient.cpp src/platform_app/PlatformClient.h
+        src/platform_app/Preview.cpp src/platform_app/Preview.h
+        src/device/BleTransport.cpp src/device/BleTransport.h
+        src/device/BluezDiscoverySession.cpp src/device/BluezDiscoverySession.h
+        src/device/BluezPairingAgent.cpp src/device/BluezPairingAgent.h)
+    target_include_directories(preview_input_tests PRIVATE src)
+    target_link_libraries(preview_input_tests PRIVATE Flint::Platform
+        Qt6::Quick Qt6::SerialPort Qt6::Bluetooth Qt6::Widgets)
+    target_compile_definitions(preview_input_tests PRIVATE
+        FLINT_FLARE_VERSION="${PROJECT_VERSION}"
+        FLINT_COUNTER_PACKAGE="${CMAKE_CURRENT_SOURCE_DIR}/platform/examples/counter/sample.ignit")
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_compile_definitions(preview_input_tests PRIVATE FLINT_BLUEZ_DBUS)
+        target_link_libraries(preview_input_tests PRIVATE Qt6::DBus)
+    endif()
+    qt_add_resources(preview_input_tests test_factory PREFIX "/factory"
+        BASE "${CMAKE_CURRENT_SOURCE_DIR}/platform/factory" FILES ${FLINT_FACTORY})
+    add_test(NAME preview_application_api COMMAND preview_input_tests)
+    set_tests_properties(preview_application_api PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software" TIMEOUT 15)
+endif()

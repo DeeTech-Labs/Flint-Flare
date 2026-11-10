@@ -34,11 +34,11 @@ void main() {
         float body = exp(-abs(curve) / width);
         float edge = exp(-abs(curve + width * 0.65) * 330.0);
         float aperture = exp(-pow(abs(p.x + 0.04 * k) * 0.90, 3.0));
-        vec3 hue = mix(vec3(0.025, 0.17, 0.88), ink.rgb, 0.5 + 0.5 * sin(k * 0.8 + p.x * 1.8 + t));
-        light += (hue * body * 0.28 + vec3(0.55, 0.96, 1.0) * edge * 0.40) * aperture;
+        vec3 hue = mix(ink.rgb * 0.32, ink.rgb, 0.5 + 0.5 * sin(k * 0.8 + p.x * 1.8 + t));
+        light += (hue * body * 0.28 + vec3(0.90, 0.92, 0.95) * edge * 0.40) * aperture;
     }
     float veil = exp(-dot(p * vec2(0.85, 1.6), p * vec2(0.85, 1.6)) * 2.5);
-    light += vec3(0.02, 0.12, 0.24) * veil;
+    light += ink.rgb * 0.10 * veil;
     light = vec3(1.0) - exp(-light * 1.55);
     float mask = smoothstep(0.25, 0.58, uv.x);
     float vignette = smoothstep(0.0, 0.16, uv.y) * (1.0 - smoothstep(0.84, 1.0, uv.y));
