@@ -66,6 +66,7 @@ void BleTransport::scan() {
 }
 void BleTransport::open(const QString& id) {
     close();
+    const auto generation = m_generation;
     for (const auto& device : m_devices) {
         if (key(device) != id) continue;
         if (m_discovery) m_discovery->stop();
@@ -75,10 +76,10 @@ void BleTransport::open(const QString& id) {
         // Without CAP_NET_ADMIN, Qt cannot infer this and defaults to RandomAddress.
         m_controller->setRemoteAddressType(QLowEnergyController::PublicAddress);
 #endif
-        connect(m_controller, &QLowEnergyController::connected, this, [this] { m_controller->discoverServices(); });
-        connect(m_controller, &QLowEnergyController::discoveryFinished, this, &BleTransport::discoverService);
-        connect(m_controller, &QLowEnergyController::disconnected, this, [this] { emit error(tr("Bluetooth device disconnected.")); });
-        connect(m_controller, &QLowEnergyController::errorOccurred, this, [this] { emit error(m_controller->errorString()); });
+        connect(m_controller, &QLowEnergyController::connected, this, [this,generation] { if (generation == m_generation && m_controller) m_controller->discoverServices(); });
+        connect(m_controller, &QLowEnergyController::discoveryFinished, this, [this,generation] { if (generation == m_generation && m_controller) discoverService(); });
+        connect(m_controller, &QLowEnergyController::disconnected, this, [this,generation] { if (generation == m_generation) emit error(tr("Bluetooth device disconnected.")); });
+        connect(m_controller, &QLowEnergyController::errorOccurred, this, [this,generation] { if (generation == m_generation && m_controller) emit error(m_controller->errorString()); });
         m_timeout.start();
 #ifdef Q_OS_LINUX
         // BlueZ needs an explicit pairing request/agent before encrypted GATT access.
@@ -87,12 +88,13 @@ void BleTransport::open(const QString& id) {
         }
         m_pairer = new QBluetoothLocalDevice(this);
         connect(m_pairer,&QBluetoothLocalDevice::pairingFinished,this,
-                [this,address=device.address()](const QBluetoothAddress& peer,QBluetoothLocalDevice::Pairing pairing) {
-            if (peer != address || !m_controller) return;
+                [this,generation,address=device.address()](const QBluetoothAddress& peer,QBluetoothLocalDevice::Pairing pairing) {
+            if (generation != m_generation || peer != address || !m_controller) return;
             if (pairing == QBluetoothLocalDevice::Paired || pairing == QBluetoothLocalDevice::AuthorizedPaired)
                 m_controller->connectToDevice();
         });
-        connect(m_pairer,&QBluetoothLocalDevice::errorOccurred,this,[this](QBluetoothLocalDevice::Error) {
+        connect(m_pairer,&QBluetoothLocalDevice::errorOccurred,this,[this,generation](QBluetoothLocalDevice::Error) {
+            if (generation != m_generation) return;
             emit error(tr("Bluetooth pairing failed. Accept the system pairing request and try again."));
         });
         m_pairer->requestPairing(device.address(),QBluetoothLocalDevice::Paired);
@@ -104,18 +106,22 @@ void BleTransport::open(const QString& id) {
     emit error(tr("Scan again and select a FlinT Bluetooth device."));
 }
 void BleTransport::discoverService() {
+    const auto generation = m_generation;
     m_service = m_controller->createServiceObject(serviceUuid, this);
     if (!m_service) { emit error(tr("FlinT Bluetooth service is missing.")); return; }
-    connect(m_service, &QLowEnergyService::stateChanged, this, [this](QLowEnergyService::ServiceState state) {
+    connect(m_service, &QLowEnergyService::stateChanged, this, [this,generation](QLowEnergyService::ServiceState state) {
+        if (generation != m_generation) return;
         if (state == QLowEnergyService::RemoteServiceDiscovered) subscribe();
     });
-    connect(m_service, &QLowEnergyService::errorOccurred, this, [this] { emit error(tr("Bluetooth service exchange failed.")); });
+    connect(m_service, &QLowEnergyService::errorOccurred, this, [this,generation] { if (generation == m_generation) emit error(tr("Bluetooth service exchange failed.")); });
     connect(m_service, &QLowEnergyService::characteristicChanged, this,
-            [this](const QLowEnergyCharacteristic& characteristic, const QByteArray& bytes) {
+            [this,generation](const QLowEnergyCharacteristic& characteristic, const QByteArray& bytes) {
+        if (generation != m_generation) return;
         if (characteristic == m_tx) emit received(bytes);
     });
     connect(m_service, &QLowEnergyService::descriptorWritten, this,
-            [this](const QLowEnergyDescriptor& descriptor, const QByteArray& value) {
+            [this,generation](const QLowEnergyDescriptor& descriptor, const QByteArray& value) {
+        if (generation != m_generation) return;
         if (descriptor == m_tx.clientCharacteristicConfiguration() && value == QByteArray::fromHex("0200")) {
             m_ready = true;
             m_timeout.stop();
@@ -123,7 +129,8 @@ void BleTransport::discoverService() {
         }
     });
     connect(m_service, &QLowEnergyService::characteristicWritten, this,
-            [this](const QLowEnergyCharacteristic& characteristic, const QByteArray&) {
+            [this,generation](const QLowEnergyCharacteristic& characteristic, const QByteArray&) {
+        if (generation != m_generation) return;
         if (characteristic == m_rx) { m_writeInFlight = false; writeNext(); }
     });
     m_service->discoverDetails();
@@ -151,8 +158,10 @@ void BleTransport::writeNext() {
     m_outgoing.remove(0, chunk.size());
     m_writeInFlight = true;
     m_service->writeCharacteristic(m_rx, chunk, QLowEnergyService::WriteWithResponse);
+    if (m_outgoing.isEmpty()) emit writable();
 }
 void BleTransport::close() {
+    ++m_generation;
     m_outgoing.clear();
     m_writeInFlight = false;
     if (m_discovery) m_discovery->stop();

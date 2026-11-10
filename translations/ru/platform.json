@@ -82,6 +82,10 @@
             "Set the UTC offset in minutes. Clock, theme and language are provided by Ignite packages.": "Укажите смещение UTC в минутах. Часы, тему и язык предоставляют пакеты Ignite.",
             "UTC offset, minutes": "Смещение UTC, минуты",
             "Restore factory components": "Вернуть заводские компоненты"
+        },
+        "PlatformClient": {
+            "Disconnecting…": "Отключение…",
+            "Package verification timed out": "Время проверки пакета истекло"
         }
     }
 }

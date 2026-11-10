@@ -28,7 +28,7 @@ public:
     bool autoSyncTime() const;
     void setAutoSyncTime(bool enabled);
     bool connecting() const {
-        return !connected_ && (serial_.isOpen() || (ble_ && ble_->active()));
+        return !closing_ && !connected_ && (serial_.isOpen() || (ble_ && ble_->active()));
     }
     bool connected() const {
         return connected_;
@@ -55,7 +55,7 @@ public:
         return watchPairingCode_;
     }
     bool localTrustChannel() const {
-        return serial_.isOpen();
+        return !closing_ && serial_.isOpen();
     }
     void request(flint::Method method, flint::Bytes payload, Callback callback);
     void discardCompanionSamples();
@@ -89,22 +89,31 @@ private:
         flint::Frame frame;
         Callback callback;
         uint64_t queuedAt{};
+        uint64_t sentAt{};
     };
     QSerialPort serial_;
     std::unique_ptr<BleTransport> ble_;
     QTimer timeout_;
     QTimer pairingPoll_;
     QTimer simulationTick_;
+    QTimer closeTimeout_;
+    QTimer installTimeout_;
+    std::function<void()> afterClose_;
+    bool closing_{};
+    bool finishingDisconnect_{};
+    uint32_t closeId_{};
+    uint64_t closeConfirmed_{}, closeTimeouts_{};
     QString watchPairingCode_;
     flint::FrameParser parser_;
     flint::FrameParser usbParser_;
     std::deque<Pending> queue_;
     std::unique_ptr<Pending> pending_;
+    std::unique_ptr<Pending> installPending_;
     uint32_t nextId_{};
     uint64_t generation_{};
     uint64_t capabilities_{};
     uint64_t requests_{}, requestErrors_{}, queueRejected_{}, queuePeak_{}, rxBytes_{}, txBytes_{},
-        timeouts_{}, sentAt_{}, maxQueueMs_{}, maxRequestMs_{};
+        timeouts_{}, maxQueueMs_{}, maxRequestMs_{};
     std::unique_ptr<flint::Core> core_;
     std::unique_ptr<QTemporaryDir> simulation_;
     flint::Session session_{true, false, 1};
@@ -118,5 +127,10 @@ private:
     void ensureBle();
     void scheduleSimulation();
     void drainSimulationEvents();
+    void resetConnection(std::function<void()> afterClose = {});
+    void finishDisconnect();
+    void startSimulatorNow();
+    void openUsb(const QString &port);
+    void openBle(const QString &address);
 };
 QString platformError(flint::Error error);

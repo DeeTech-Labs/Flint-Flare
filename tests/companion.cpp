@@ -1,5 +1,6 @@
 #include "platform_app/CompanionService.h"
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
@@ -20,8 +21,24 @@ struct PlatformClientTestAccess {
         const auto bytes = flint::encodeFrame(frame);
         client.receive(QByteArray(reinterpret_cast<const char *>(bytes.data()), bytes.size()));
     }
+    static void closing(PlatformClient &client, std::function<void()> done) {
+        client.disconnectDevice();
+        client.closing_ = true;
+        client.closeId_ = 200;
+        client.afterClose_ = std::move(done);
+        client.closeTimeout_.start();
+    }
+    static void usb(PlatformClient &client, const flint::Frame &frame) {
+        const auto bytes = flint::encodeFrame(frame);
+        client.receive(
+            QByteArray(reinterpret_cast<const char *>(bytes.data()), bytes.size()), true);
+    }
     static bool waiting(const PlatformClient &client) {
-        return client.pending_ && client.timeout_.isActive();
+        return (client.pending_ && client.timeout_.isActive()) ||
+            (client.installPending_ && client.installTimeout_.isActive());
+    }
+    static bool installWaiting(const PlatformClient &client) {
+        return client.installPending_ && client.installTimeout_.isActive();
     }
 };
 static bool waitFor(const std::function<bool()> &predicate, int milliseconds = 3000) {
@@ -94,6 +111,35 @@ int main(int argc, char **argv) {
     const auto stoppedSamples = companion.diagnostics().value("sample_attempts").toULongLong();
     CHECK(waitFor([&] { return !PlatformClientTestAccess::waiting(client); }));
     CHECK(companion.diagnostics().value("sample_attempts").toULongLong() == stoppedSamples);
+    // The simulator must deliver an install reply from a later Core tick.
+    QFile package(QStringLiteral(FLINT_MONITOR_PACKAGE));
+    CHECK(package.open(QIODevice::ReadOnly));
+    const auto bytes = package.readAll();
+    package.close();
+    CHECK(QFile::copy(QStringLiteral(FLINT_MONITOR_PACKAGE), staging));
+    const auto metadata = std::to_string(bytes.size()) + ":" +
+        QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex().toStdString();
+    CHECK(flint::writeAtomic(staging.toStdString() + ".meta",
+        {reinterpret_cast<const uint8_t *>(metadata.data()), metadata.size()}));
+    bool committed = false;
+    bool concurrentInfo = false, installSawInfo = false, independentTimeout = false;
+    flint::Error commitError = flint::Error::ok;
+    client.request(flint::Method::install_commit, {}, [&](auto error, auto) {
+        committed = true;
+        installSawInfo = concurrentInfo;
+        commitError = error;
+    });
+    client.request(flint::Method::info, {}, [&](auto error, auto) {
+        concurrentInfo = error == flint::Error::ok;
+        independentTimeout = PlatformClientTestAccess::installWaiting(client);
+    });
+    PlatformClientTestAccess::receive(
+        client, {flint::Method::companion_state, 0, false, snapshot.data});
+    CHECK(!committed && PlatformClientTestAccess::waiting(client));
+    CHECK(waitFor([&] { return committed && concurrentInfo; }));
+    CHECK(installSawInfo && independentTimeout);
+    CHECK(commitError ==
+        flint::Error::incompatible_contract); // Existing version, not a second activation.
     {
         auto temporary = std::make_unique<CompanionService>(&client);
         temporary->setMetricsAllowed(true);
@@ -110,5 +156,16 @@ int main(int argc, char **argv) {
     client.startSimulator();
     CHECK(waitFor([&] { return client.connected(); }));
     CHECK(!late && !companion.metricsAllowed());
+    bool closed = false;
+    PlatformClientTestAccess::closing(client, [&] { closed = true; });
+    PlatformClientTestAccess::usb(client, {flint::Method::info, 200, true, {0, 0}});
+    PlatformClientTestAccess::usb(client, {flint::Method::session_close, 199, true, {0, 0}});
+    CHECK(!closed);
+    PlatformClientTestAccess::usb(client, {flint::Method::session_close, 200, true, {0, 0}});
+    CHECK(closed && client.diagnostics().value("session_close_confirmed").toULongLong() == 1);
+    closed = false;
+    PlatformClientTestAccess::closing(client, [&] { closed = true; });
+    CHECK(waitFor([&] { return closed; }));
+    CHECK(client.diagnostics().value("session_close_timeouts").toULongLong() == 1);
     puts("Companion demand, unsolicited events, pending requests and stale callbacks: passed");
 }

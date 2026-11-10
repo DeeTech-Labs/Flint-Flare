@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <QBluetoothDeviceDiscoveryAgent>
 #include <QBluetoothLocalDevice>
 #include "BluezDiscoverySession.h"
@@ -25,10 +26,12 @@ public:
     void open(const QString& id);
     void close();
     bool write(const QByteArray& frame);
+    bool canWrite() const { return m_ready && m_service && m_outgoing.isEmpty(); }
 signals:
     void pairingCodeChanged();
     void devicesChanged();
     void readyChanged();
+    void writable();
     void received(const QByteArray& bytes);
     void error(const QString& message);
 private:
@@ -36,6 +39,7 @@ private:
     void discoverService();
     void subscribe();
     void writeNext();
+    uint64_t m_generation = 0;
     QByteArray m_outgoing;
     bool m_writeInFlight = false;
     BluezDiscoverySession m_bluezDiscovery;

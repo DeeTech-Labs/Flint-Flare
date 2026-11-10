@@ -6,6 +6,9 @@ IgniteHub::IgniteHub(PlatformClient *client) : client_(client) {
     connect(client, &PlatformClient::ready, this, &IgniteHub::refresh);
     connect(client, &PlatformClient::disconnected, this, [this] {
         busy_ = false;
+        install_.clear();
+        offset_ = 0;
+        progress_ = 0;
         packages_.clear();
         permissions_.clear();
         selected_.clear();
@@ -155,8 +158,8 @@ void IgniteHub::install(const QUrl &url) {
         return;
     auto error = package.open(input.source());
     if (error == flint::Error::ok)
-        error = flint::validateApplication(package, manifest, {48 * 1024, 0, 4096},
-            client_->capabilities());
+        error = flint::validateApplication(
+            package, manifest, {48 * 1024, 0, 4096}, client_->capabilities());
     if (error != flint::Error::ok) {
         message_ = platformError(error);
         emit changed();
@@ -188,6 +191,9 @@ void IgniteHub::chunk() {
     if (!busy_)
         return;
     if (offset_ == uint32_t(install_.size())) {
+        progress_ = 0.95;
+        message_ = tr("Verifying and activating package…");
+        emit changed();
         client_->request(flint::Method::install_commit, {}, [this](auto e, auto) {
             progress_ = e == flint::Error::ok ? 1 : progress_;
             install_.clear();
@@ -211,7 +217,7 @@ void IgniteHub::chunk() {
             return;
         }
         offset_ = offset;
-        progress_ = double(offset_) / install_.size();
+        progress_ = 0.95 * double(offset_) / install_.size();
         emit changed();
         chunk();
     });
