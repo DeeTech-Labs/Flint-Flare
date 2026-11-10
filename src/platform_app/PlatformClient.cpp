@@ -29,6 +29,7 @@ PlatformClient::PlatformClient(QObject *parent) : QObject(parent) {
     connect(&simulationTick_, &QTimer::timeout, this, [this] {
         if (core_ && core_->tick())
             emit simulationSceneChanged();
+        drainSimulationEvents();
         scheduleSimulation();
     });
     pairingPoll_.setInterval(1000);
@@ -38,8 +39,11 @@ PlatformClient::PlatformClient(QObject *parent) : QObject(parent) {
     });
     timeout_.setSingleShot(true);
     timeout_.setInterval(45000);
-    connect(&timeout_, &QTimer::timeout, this, [this] { fail("Устройство не ответило вовремя"); });
-    connect(&serial_, &QSerialPort::readyRead, this, [this] { receive(serial_.readAll()); });
+    connect(&timeout_, &QTimer::timeout, this, [this] {
+        ++timeouts_;
+        fail("Устройство не ответило вовремя");
+    });
+    connect(&serial_, &QSerialPort::readyRead, this, [this] { receive(serial_.readAll(), true); });
     connect(&serial_, &QSerialPort::errorOccurred, this, [this](auto error) {
         if (error == QSerialPort::ResourceError)
             fail(serial_.errorString());
@@ -64,7 +68,8 @@ void PlatformClient::ensureBle() {
     ble_ = std::make_unique<BleTransport>();
     connect(ble_.get(), &BleTransport::devicesChanged, this, &PlatformClient::changed);
     connect(ble_.get(), &BleTransport::pairingCodeChanged, this, &PlatformClient::changed);
-    connect(ble_.get(), &BleTransport::received, this, &PlatformClient::receive);
+    connect(ble_.get(), &BleTransport::received, this,
+        [this](const QByteArray &bytes) { receive(bytes); });
     connect(ble_.get(), &BleTransport::error, this, &PlatformClient::fail);
     connect(ble_.get(), &BleTransport::readyChanged, this, [this] {
         if (ble_->ready())
@@ -89,6 +94,7 @@ void PlatformClient::disconnectDevice() {
     core_.reset();
     simulation_.reset();
     parser_.reset();
+    usbParser_.reset();
     info_.clear();
     status_ = "Отключено";
     emit disconnected();
@@ -117,12 +123,14 @@ void PlatformClient::scanBle() {
 }
 void PlatformClient::connectBle(const QString &address) {
     if (serial_.isOpen()) {
+        ++generation_;
         // Retain the authenticated local USB channel for numeric comparison.
         timeout_.stop();
         connected_ = false;
         queue_.clear();
         pending_.reset();
         parser_.reset();
+        usbParser_.reset();
         info_.clear();
         emit disconnected();
     } else {
@@ -227,13 +235,27 @@ void PlatformClient::request(flint::Method method, flint::Bytes payload, Callbac
         callback(flint::Error::source_unavailable, {});
         return;
     }
-    if (queue_.size() > 64) {
+    if (method == flint::Method::companion_sample) {
+        // Samples have no value after a newer sample or demand generation arrives.
+        std::erase_if(queue_, [](const auto &entry) {
+            return entry.frame.method == flint::Method::companion_sample;
+        });
+    }
+    if (queue_.size() >= 64) {
+        ++queueRejected_;
         callback(flint::Error::quota_exceeded, {});
         return;
     }
     if (++nextId_ == 0)
         ++nextId_;
-    queue_.push_back({{method, nextId_, false, std::move(payload)}, std::move(callback)});
+    ++requests_;
+    queue_.push_back({{method, nextId_, false, std::move(payload)},
+        [this, generation = generation_, callback = std::move(callback)](auto error, auto data) {
+            if (generation == generation_)
+                callback(error, std::move(data));
+        },
+        monotonic()});
+    queuePeak_ = std::max<uint64_t>(queuePeak_, queue_.size());
     sendNext();
 }
 void PlatformClient::sendNext() {
@@ -241,12 +263,15 @@ void PlatformClient::sendNext() {
         return;
     pending_ = std::make_unique<Pending>(std::move(queue_.front()));
     queue_.pop_front();
+    sentAt_ = monotonic();
+    maxQueueMs_ = std::max(maxQueueMs_, sentAt_ - pending_->queuedAt);
     auto wire = flint::encodeFrame(pending_->frame);
     if (wire.empty()) {
         fail("Запрос превышает лимит протокола");
         return;
     }
     timeout_.start();
+    txBytes_ += wire.size();
     if (core_) {
         QTimer::singleShot(
             0, this, [this, wire, generation = generation_, id = pending_->frame.id] {
@@ -256,6 +281,7 @@ void PlatformClient::sendNext() {
                 parser.feed(wire, [this](flint::Frame frame) {
                     auto reply = flint::encodeFrame(core_->handle(frame, session_));
                     receive(QByteArray(reinterpret_cast<const char *>(reply.data()), reply.size()));
+                    drainSimulationEvents();
                     scheduleSimulation();
                 });
             });
@@ -269,16 +295,40 @@ void PlatformClient::sendNext() {
         fail("Не удалось отправить BLE-пакет");
     }
 }
-void PlatformClient::receive(const QByteArray &bytes) {
-    parser_.feed({reinterpret_cast<const uint8_t *>(bytes.data()), size_t(bytes.size())},
-        [this](flint::Frame frame) {
+void PlatformClient::receive(const QByteArray &bytes, bool usb) {
+    rxBytes_ += bytes.size();
+    auto &parser = usb ? usbParser_ : parser_;
+    parser.feed({reinterpret_cast<const uint8_t *>(bytes.data()), size_t(bytes.size())},
+        [this, usb](flint::Frame frame) {
+            if (flint::isCompanionEvent(frame)) {
+                if (usb && ble_ && ble_->ready())
+                    return;
+                if (!connected_ || !(capabilities_ & flint::CapCompanionDemand))
+                    return;
+                flint::Reader event{frame.payload};
+                const auto version = event.n(2), kind = event.n(1), generation = event.n(8),
+                           state = event.n(1);
+                event.n(8); // The SDK owns the consumer identity.
+                const auto interval = event.n(), ttl = event.n();
+                if (!event.done() || version != flint::CompanionDemandVersion || kind != 1 ||
+                    !generation || state > 2 || interval < 1000 || interval > 60000 ||
+                    ttl < interval) {
+                    fail(tr("Invalid Companion state."));
+                    return;
+                }
+                emit companionState(generation, int(state), int(interval));
+                return;
+            }
             if (!pending_ || !frame.reply || frame.id != pending_->frame.id ||
                 frame.method != pending_->frame.method)
                 return;
             timeout_.stop();
+            maxRequestMs_ = std::max(maxRequestMs_, monotonic() - sentAt_);
             auto done = std::move(pending_);
             flint::Reader r{frame.payload};
             auto error = flint::Error(r.n(2));
+            if (error != flint::Error::ok)
+                ++requestErrors_;
             if (!r.valid) {
                 fail("Повреждённый ответ");
                 return;
@@ -287,6 +337,13 @@ void PlatformClient::receive(const QByteArray &bytes) {
             done->callback(error, std::move(data));
             QTimer::singleShot(0, this, [this] { sendNext(); });
         });
+}
+QVariantMap PlatformClient::diagnostics() const {
+    return {{"requests", qulonglong(requests_)}, {"request_errors", qulonglong(requestErrors_)},
+        {"queue_depth", qulonglong(queue_.size())}, {"queue_peak", qulonglong(queuePeak_)},
+        {"queue_rejected", qulonglong(queueRejected_)}, {"rx_bytes", qulonglong(rxBytes_)},
+        {"tx_bytes", qulonglong(txBytes_)}, {"timeouts", qulonglong(timeouts_)},
+        {"max_queue_ms", qulonglong(maxQueueMs_)}, {"max_request_ms", qulonglong(maxRequestMs_)}};
 }
 void PlatformClient::refreshInfo() {
     request(flint::Method::info, {}, [this](auto error, auto data) {
@@ -354,7 +411,7 @@ void PlatformClient::scheduleSimulation() {
         simulationTick_.stop();
         return;
     }
-    const auto deadline = core_->nextWake();
+    const auto deadline = std::min(core_->nextWake(), core_->companionNextWake(session_));
     if (deadline == UINT64_MAX) {
         simulationTick_.stop();
         return;
@@ -372,4 +429,19 @@ flint::Error PlatformClient::simulatorInput(flint::InputEvent event) {
     if (error == flint::Error::ok)
         scheduleSimulation();
     return error;
+}
+void PlatformClient::discardCompanionSamples() {
+    std::erase_if(queue_, [](const auto &entry) {
+        return entry.frame.method == flint::Method::companion_sample ||
+            entry.frame.method == flint::Method::companion_bind;
+    });
+}
+void PlatformClient::drainSimulationEvents() {
+    if (!core_)
+        return;
+    flint::Frame event;
+    if (core_->takeCompanionEvent(session_, event)) {
+        const auto bytes = flint::encodeFrame(event);
+        receive(QByteArray(reinterpret_cast<const char *>(bytes.data()), bytes.size()));
+    }
 }

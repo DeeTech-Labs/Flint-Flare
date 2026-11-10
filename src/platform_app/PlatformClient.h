@@ -58,6 +58,8 @@ public:
         return serial_.isOpen();
     }
     void request(flint::Method method, flint::Bytes payload, Callback callback);
+    void discardCompanionSamples();
+    Q_INVOKABLE QVariantMap diagnostics() const;
     flint::Core *simulator() {
         return core_.get();
     }
@@ -79,11 +81,14 @@ signals:
     void disconnected();
     void failure(const QString &message);
     void simulationSceneChanged();
+    void companionState(qulonglong generation, int state, int intervalMs);
 
 private:
+    friend struct PlatformClientTestAccess;
     struct Pending {
         flint::Frame frame;
         Callback callback;
+        uint64_t queuedAt{};
     };
     QSerialPort serial_;
     std::unique_ptr<BleTransport> ble_;
@@ -92,11 +97,14 @@ private:
     QTimer simulationTick_;
     QString watchPairingCode_;
     flint::FrameParser parser_;
+    flint::FrameParser usbParser_;
     std::deque<Pending> queue_;
     std::unique_ptr<Pending> pending_;
     uint32_t nextId_{};
     uint64_t generation_{};
     uint64_t capabilities_{};
+    uint64_t requests_{}, requestErrors_{}, queueRejected_{}, queuePeak_{}, rxBytes_{}, txBytes_{},
+        timeouts_{}, sentAt_{}, maxQueueMs_{}, maxRequestMs_{};
     std::unique_ptr<flint::Core> core_;
     std::unique_ptr<QTemporaryDir> simulation_;
     flint::Session session_{true, false, 1};
@@ -104,10 +112,11 @@ private:
     QString status_{"Отключено"};
     QVariantMap info_;
     void sendNext();
-    void receive(const QByteArray &bytes);
+    void receive(const QByteArray &bytes, bool usb = false);
     void handshake();
     void fail(const QString &message);
     void ensureBle();
     void scheduleSimulation();
+    void drainSimulationEvents();
 };
 QString platformError(flint::Error error);

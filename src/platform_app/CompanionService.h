@@ -13,6 +13,11 @@ public:
     QString status() const {
         return status_;
     }
+    Q_INVOKABLE QVariantMap diagnostics() const {
+        return {{"sample_attempts", qulonglong(sampleAttempts_)},
+            {"permission_requests", qulonglong(permissionRequests_)},
+            {"metric_samples", qulonglong(metricSamples_)}};
+    }
 signals:
     void changed();
 
@@ -20,7 +25,14 @@ private:
     PlatformClient *client_;
     QTimer timer_;
     bool allowed_{};
-    QString status_{"Передача CPU/RAM выключена"};
+    QString status_;
     quint64 total_{}, idle_{};
+    quint64 sampleAttempts_{}, permissionRequests_{}, metricSamples_{}, generation_{};
+    quint64 demandGeneration_{};
+    int demand_{-1};
+    bool bound_{}, samplePending_{}, delivered_{};
     void sample();
+    void subscribe();
+    void stopSampling();
+    void updateStatus();
 };
