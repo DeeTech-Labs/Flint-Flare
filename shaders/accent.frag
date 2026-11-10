@@ -28,7 +28,7 @@ void main() {
         float haze = exp(-d*d*220.0) * (0.09 + breath*0.035);
         float filament = exp(-abs(d)*230.0) * 0.13;
         float falloff = 1.0 - smoothstep(0.38, 0.49, radius);
-        color = mix(vec3(0.16, 0.33, 0.91), ink.rgb, 0.5 + 0.5*sin(angle + phase*0.10));
+        color = mix(ink.rgb * 0.48, ink.rgb, 0.5 + 0.5*sin(angle + phase*0.10));
         alpha = (haze + filament) * falloff * strength;
     } else {
         // Selected-card edge. The sweep completes once; the idle rim is static.
@@ -42,7 +42,7 @@ void main() {
         float beam = exp(-pow((uv.x + uv.y*0.3 - (sweep*1.75 - 0.2))/0.14, 2.0));
         float envelope = sin(clamp(sweep, 0.0, 1.0)*3.14159265);
         alpha = (edge*0.30 + glow*0.018 + beam*envelope*(edge*0.55 + glow*0.07)) * strength;
-        color = mix(ink.rgb, vec3(0.78, 0.96, 1.0), beam*envelope*0.6);
+        color = mix(ink.rgb, vec3(0.92, 0.94, 0.97), beam*envelope*0.6);
     }
     alpha = clamp(alpha, 0.0, 0.8);
     fragColor = vec4(color*alpha, alpha)*qt_Opacity;

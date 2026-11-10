@@ -103,8 +103,10 @@ ApplicationWindow {
             Layout.fillHeight: !app.compact
             Layout.preferredWidth: app.compact ? -1 : 60
         }
-        Rectangle {
-            color: Theme.base
+        MetalSurface {
+            tone: Theme.base
+            edgeColor: Theme.divider
+            raised: false
             radius: 18
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -152,6 +154,7 @@ ApplicationWindow {
                     }
                     WatchSettingsPage {
                         session: client
+                        onConnectRequested: app.section = 6
                     }
                     FaceGalleryPage {}
                     CompanionPage {}
@@ -198,10 +201,10 @@ ApplicationWindow {
         y: app.height - height - 24
         width: Math.min(app.width - 32, 620)
         padding: 18
-        background: Rectangle {
-            color: Theme.surface
+        background: MetalSurface {
+            tone: Theme.surface
             radius: 14
-            border.color: Theme.inputBorder
+            edgeColor: Theme.inputBorder
         }
         contentItem: Label {
             id: toastText
@@ -231,10 +234,10 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
         width: 440
         padding: 20
-        background: Rectangle {
-            color: Theme.surface
+        background: MetalSurface {
+            tone: Theme.surface
             radius: 16
-            border.color: Theme.inputBorder
+            edgeColor: Theme.inputBorder
         }
         contentItem: ColumnLayout {
             Label {

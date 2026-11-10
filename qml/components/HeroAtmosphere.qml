@@ -17,42 +17,81 @@ Item {
         running: atmosphere.motionRunning && atmosphere.gpuAvailable
         onTriggered: atmosphere.phase += 0.033
     }
+    // A machined titanium ring also supplies depth with software rendering.
+    Item {
+        id: sculpture
+        anchors.right: parent.right
+        anchors.rightMargin: 24
+        anchors.verticalCenter: parent.verticalCenter
+        width: Math.min(560, parent.width * 0.55)
+        height: width
+        rotation: -28
+        opacity: parent.width < 740 ? 0.25 : 0.88
+        Rectangle {
+            anchors.fill: parent
+            anchors.topMargin: 10
+            anchors.bottomMargin: -10
+            radius: width / 2
+            color: Theme.titaniumShadow
+        }
+        Rectangle {
+            anchors.fill: parent
+            radius: width / 2
+            gradient: Gradient {
+                GradientStop { position: 0; color: Theme.titaniumDark }
+                GradientStop { position: 0.22; color: Theme.titaniumMid }
+                GradientStop { position: 0.38; color: Theme.titaniumLight }
+                GradientStop { position: 0.44; color: Theme.titaniumSpecular }
+                GradientStop { position: 0.52; color: Theme.titaniumMid }
+                GradientStop { position: 0.78; color: Theme.titaniumDark }
+                GradientStop { position: 1; color: Theme.titaniumMid }
+            }
+            border.color: Theme.titaniumMid
+        }
+        Repeater {
+            model: 24
+            Rectangle {
+                required property int index
+                anchors.centerIn: parent
+                width: parent.width - 4 - index * 3
+                height: width
+                radius: width / 2
+                color: "transparent"
+                border.color: index % 2 === 0 ? Theme.titaniumGrooveLight : Theme.titaniumGrooveDark
+                border.width: 1
+            }
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: parent.width * 0.68
+            height: width
+            radius: width / 2
+            gradient: Gradient {
+                GradientStop { position: 0; color: Theme.titaniumInset }
+                GradientStop { position: 0.35; color: Theme.heroEnd }
+                GradientStop { position: 1; color: Theme.heroStart }
+            }
+            border.color: Theme.titaniumDark
+            border.width: 3
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: 4
+                radius: width / 2
+                color: "transparent"
+                border.color: Theme.titaniumLight
+                opacity: 0.22
+            }
+        }
+    }
     Loader {
         anchors.fill: parent
         active: atmosphere.active && atmosphere.gpuAvailable
+        opacity: 0.28
         sourceComponent: ShaderEffect {
             property vector2d resolution: Qt.vector2d(width, height)
-            property color ink: "#30d4ef"
+            property color ink: Theme.heroDecoration
             property real phase: atmosphere.phase
-
             fragmentShader: "qrc:/shaders/atmosphere.frag.qsb"
         }
-    }
-    // A composed static alternative for software rendering; no shader warnings or blank hero.
-    Rectangle {
-        visible: !atmosphere.gpuAvailable
-        anchors.right: parent.right
-        anchors.rightMargin: 40
-        anchors.verticalCenter: parent.verticalCenter
-        width: parent.width * 0.42
-        height: parent.height * 0.48
-        radius: height / 2
-        rotation: -23
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop {
-                position: 0
-                color: "#08233e"
-            }
-            GradientStop {
-                position: 0.55
-                color: "#0c5480"
-            }
-            GradientStop {
-                position: 1
-                color: "#208b9c"
-            }
-        }
-        opacity: 0.6
     }
 }

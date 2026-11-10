@@ -55,14 +55,10 @@ Button {
             Layout.preferredHeight: 14
         }
     }
-    background: Rectangle {
+    background: MetalSurface {
         radius: 12
-        color: tile.down ? Theme.metric : tile.hovered ? Theme.buttonHover : Theme.surface
-        border.color: tile.visualFocus ? Theme.accent : "transparent"
-        Behavior on color {
-            ColorAnimation {
-                duration: Theme.animationDuration
-            }
-        }
+        tone: tile.down ? Theme.metric : tile.hovered ? Theme.buttonHover : Theme.surface
+        edgeColor: tile.visualFocus ? Theme.accent : tile.hovered ? Theme.metalEdge : Theme.divider
+        pressed: tile.down
     }
 }

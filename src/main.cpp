@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
         auto *check = new QTimer(&app);
         check->setInterval(100);
         QObject::connect(check, &QTimer::timeout, &app, [&, state, check] {
-            if (!client.connected())
+            if (!client.connected() && state->phase != 10)
                 return;
             const QString sampleId = "example.pc-monitor";
             bool installed = false;
@@ -171,6 +171,8 @@ int main(int argc, char **argv) {
                 if (installed || hub.packages().size() != 6 || hub.busy())
                     return;
                 state->phase = 8;
+                // Let SwipeView finish its transition before checking or capturing a page.
+                check->setInterval(350);
                 return;
             case 8: {
                 auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0));
@@ -179,8 +181,28 @@ int main(int argc, char **argv) {
                     app.exit(7);
                     return;
                 }
+                if (!window->findChild<QObject *>("watchDetails") ||
+                    window->findChild<QObject *>("watchEmptyState")) {
+                    fprintf(stderr, "Connected watch information is missing\n");
+                    app.exit(8);
+                    return;
+                }
+                if (state->page == 2 || state->page == 9) {
+                    auto *watchPage = window->findChild<QObject *>("watchPage");
+                    if (!watchPage || !window->findChild<QObject *>("watchControls")) {
+                        fprintf(stderr, "Watch settings failed to open\n");
+                        app.exit(11);
+                        return;
+                    }
+                    watchPage->setProperty("settingsExpanded", false);
+                    if (args.isSet("capture"))
+                        window->grabWindow().save(args.value("capture") +
+                            (state->page == 2 ? ".watch.png" : ".watch-narrow.png"));
+                }
                 window->setWidth(state->page < 7 ? 1320 : 540);
                 window->setProperty("section", state->page % 7);
+                if (state->page % 7 == 1)
+                    window->findChild<QObject *>("watchPage")->setProperty("settingsExpanded", true);
                 if (++state->page == 14) {
                     state->phase = 9;
                     window->setWidth(1320);
@@ -188,7 +210,44 @@ int main(int argc, char **argv) {
                 }
                 return;
             }
-            case 9:
+            case 9: {
+                auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0));
+                window->setProperty("section", 1);
+                client.disconnectDevice();
+                state->phase = 10;
+                return;
+            }
+            case 10: {
+                auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0));
+                auto *connectButton = window->findChild<QObject *>("watchConnectButton");
+                if (!window->findChild<QObject *>("watchEmptyState") ||
+                    window->findChild<QObject *>("watchDetails") || !connectButton ||
+                    !client.info().isEmpty()) {
+                    fprintf(stderr, "Disconnected watch still shows device information\n");
+                    app.exit(9);
+                    return;
+                }
+                if (args.isSet("capture"))
+                    window->grabWindow().save(args.value("capture") +
+                        (state->page == 14 ? ".watch-empty.png" : ".watch-empty-narrow.png"));
+                if (state->page == 14) {
+                    window->setWidth(540);
+                    ++state->page;
+                    return;
+                }
+                QMetaObject::invokeMethod(connectButton, "clicked");
+                if (window->property("section").toInt() != 6) {
+                    fprintf(stderr, "Watch connection action did not open connection page\n");
+                    app.exit(10);
+                    return;
+                }
+                client.startSimulator();
+                window->setWidth(1320);
+                window->setProperty("section", 0);
+                state->phase = 11;
+                return;
+            }
+            case 11:
                 check->stop();
                 QTimer::singleShot(300, &app, [&] {
                     if (args.isSet("capture")) {
@@ -199,7 +258,7 @@ int main(int argc, char **argv) {
                         }
                     }
                     printf(
-                        "Offline QML, all seven pages at two widths, binary handshake, Hub "
+                        "Offline QML, all seven pages at two widths, watch disconnect/connect action, binary handshake, Hub "
                         "install/launch/remove, consent/revocation and shared preview: passed\n");
                     app.exit(0);
                 });

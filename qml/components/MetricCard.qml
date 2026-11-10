@@ -3,11 +3,12 @@ import QtQuick.Controls.Basic
 import QtQuick.Layouts
 import Flint.Flare
 
-Rectangle {
+MetalSurface {
     property string label
     property string detail
     implicitHeight: Math.max(96, content.implicitHeight + 32)
-    color: Theme.metric
+    tone: Theme.metric
+    raised: false
     radius: 14
     ColumnLayout {
         id: content

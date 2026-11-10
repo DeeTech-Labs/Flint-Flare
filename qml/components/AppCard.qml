@@ -6,8 +6,5 @@ import Flint.Flare
 Pane {
     Layout.minimumWidth: 0
     padding: 18
-    background: Rectangle {
-        color: Theme.surface
-        radius: Theme.cardRadius
-    }
+    background: MetalSurface {}
 }

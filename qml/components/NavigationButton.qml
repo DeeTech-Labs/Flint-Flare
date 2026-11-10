@@ -19,7 +19,7 @@ Button {
         spacing: 4
         AppIcon {
             name: control.iconName
-            tint: control.selected ? (Theme.light ? Theme.accent : "#09293b") : control.hovered ? Theme.text : Theme.navText
+            tint: control.selected ? Theme.navSelectedText : control.hovered ? Theme.text : Theme.navText
             Layout.preferredWidth: 20
             Layout.preferredHeight: 20
             Layout.alignment: Qt.AlignHCenter
@@ -30,17 +30,20 @@ Button {
             text: control.text
             font.pixelSize: 10
             font.weight: control.selected ? Font.DemiBold : Font.Medium
-            color: control.selected ? (Theme.light ? Theme.accent : "#09293b") : Theme.navText
+            color: control.selected ? Theme.navSelectedText : Theme.navText
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
         }
     }
-    background: Rectangle {
+    background: MetalSurface {
         radius: 10
-        color: control.selected ? Theme.navSelected : control.hovered ? Theme.navHover : "transparent"
-        border.color: control.visualFocus ? Theme.accent : "transparent"
-        Behavior on color {
+        tone: control.selected ? Theme.navSelected : Theme.navHover
+        visible: control.selected || control.hovered || control.visualFocus
+        raised: control.selected
+        pressed: control.down
+        edgeColor: control.visualFocus ? Theme.accent : control.selected ? Theme.metalEdge : Theme.divider
+        Behavior on edgeColor {
             ColorAnimation {
                 duration: Theme.animationDuration
             }

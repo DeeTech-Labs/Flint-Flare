@@ -26,6 +26,8 @@ Rectangle {
             color: Theme.heroEnd
         }
     }
+    border.color: Theme.metalEdge
+    border.width: 1
     HeroAtmosphere {
         anchors.fill: parent
         active: hero.frameVisible
@@ -43,12 +45,12 @@ Rectangle {
                 width: 6
                 height: 6
                 radius: 3
-                color: hero.session.connected ? "#58e2c6" : "#6987a6"
+                color: hero.session.connected ? Theme.success : Theme.offlineDot
             }
             Label {
                 text: hero.session.transport === "SIMULATOR" && hero.session.connected ? qsTr("Simulator") : hero.session.connected ? qsTr("Connected via %1").arg(hero.session.transport) : hero.presentation.stateLabel
                 font.pixelSize: 12
-                color: "#b2c8e1"
+                color: Theme.heroCaption
             }
         }
         Label {
@@ -57,7 +59,7 @@ Rectangle {
             font.weight: Font.DemiBold
             font.letterSpacing: -2
             lineHeight: 0.98
-            color: "#f1f8ff"
+            color: Theme.heroTitle
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
         }
@@ -65,7 +67,7 @@ Rectangle {
             text: hero.session.connected ? (hero.session.info.profile || qsTr("Your watch")) : qsTr("A little device. A space of your own.")
             textFormat: Text.PlainText
             font.pixelSize: 13
-            color: "#a3bad6"
+            color: Theme.heroText
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
         }
@@ -103,7 +105,7 @@ Rectangle {
         anchors.margins: 20
         text: "F L I N T   /   " + (hero.session.info.active || "FLARE")
         font.pixelSize: 10
-        color: "#6888ad"
+        color: Theme.heroFooter
         textFormat: Text.PlainText
     }
 }

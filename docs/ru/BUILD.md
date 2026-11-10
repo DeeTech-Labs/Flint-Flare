@@ -4,6 +4,8 @@
 
 Зависимости Qt и обычные команды CMake описаны в [README](../../README.md). CTest проверяет переносимый Runtime и настоящее приложение QML с временным автономным симулятором.
 
+`flint_flare --smoke --capture /tmp/flare.png` также сохраняет снимки вкладки «Мои часы»: `/tmp/flare.png.watch.png`, `/tmp/flare.png.watch-narrow.png`, `/tmp/flare.png.watch-empty.png` и `/tmp/flare.png.watch-empty-narrow.png`. Проверяются раскрытие настроек, удаление сведений после отключения и переход к подключению на ширине 540 и 1320 пикселей. Аппаратные USB/BLE-соединения этой проверкой не покрываются. Для запуска без дисплея задайте `QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software`.
+
 `platform/` — подмодуль [Flint IgniteSDK](https://github.com/DeeTech-Labs/Flint-IgniteSDK), закреплённый на коммите. Клонируйте с `--recurse-submodules` или выполните `git submodule update --init --recursive` перед конфигурацией. Общие изменения вносятся в SDK и подключаются обновлением ссылки подмодуля. Копирования и экспорта исходников нет.
 
 Локальный Ignite собирается командой `python3 platform/tools/compile_ignite.py project.json output.ignit` или через Ignite Studio. Для исходных шрифтов и изображений нужен Pillow. Компилятор проверяет пути ресурсов относительно выбранного каталога проекта.

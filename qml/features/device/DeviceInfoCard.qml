@@ -6,7 +6,16 @@ import Flint.Flare
 AppCard {
     id: card
     required property var session
-    required property var presentation
+    function bytes(key) {
+        const value = session.info[key];
+        if (!session.connected || value === undefined || value === null)
+            return qsTr("Unavailable");
+        if (value < 1024)
+            return qsTr("%1 B").arg(value);
+        if (value < 1024 * 1024)
+            return qsTr("%1 KiB").arg(Number(value / 1024).toLocaleString(Qt.locale(), 'f', 1));
+        return qsTr("%1 MiB").arg(Number(value / (1024 * 1024)).toLocaleString(Qt.locale(), 'f', 1));
+    }
     implicitHeight: details.implicitHeight + topPadding + bottomPadding
     ColumnLayout {
         id: details
@@ -31,28 +40,29 @@ AppCard {
             columnSpacing: 16
             rowSpacing: 12
             MetricCard {
-                label: qsTr("Model")
-                detail: card.session.info.profile || "—"
+                label: qsTr("Device profile")
+                detail: card.session.connected ? (card.session.info.profile || qsTr("Unavailable")) : qsTr("Unavailable")
                 Layout.fillWidth: true
             }
             MetricCard {
                 label: qsTr("Internal RAM budget")
-                detail: (card.session.info.internal || 0) + " B"
+                detail: card.bytes("internal")
                 Layout.fillWidth: true
             }
             MetricCard {
-                label: "PSRAM"
-                detail: (card.session.info.external || 0) + " B"
+                label: qsTr("External RAM budget")
+                detail: card.bytes("external")
                 Layout.fillWidth: true
             }
             MetricCard {
                 label: qsTr("Free storage")
-                detail: (card.session.info.storage || 0) + " B"
+                detail: card.bytes("storage")
                 Layout.fillWidth: true
             }
         }
         Caption {
-            text: qsTr("Build") + ": " + (card.session.info.build || "—")
+            text: qsTr("Build: %1").arg(card.session.connected ? (card.session.info.build || qsTr("Unavailable")) : qsTr("Unavailable"))
+            textFormat: Text.PlainText
             Layout.fillWidth: true
         }
     }

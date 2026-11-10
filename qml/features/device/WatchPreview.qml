@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Dialogs
 import Flint.Flare
 
-Rectangle {
+MetalSurface {
     id: card
     required property var session
     property bool compact: false
@@ -12,7 +12,7 @@ Rectangle {
     property int zoom: 0
     implicitHeight: compact ? 280 : 410
     implicitWidth: 300
-    color: Theme.surface
+    tone: Theme.surface
     radius: 12
     FileDialog {
         id: captureDialog

@@ -43,7 +43,7 @@ ComboBox {
         contentItem: Text {
             text: control.textAt(index)
             textFormat: Text.PlainText
-            color: Theme.text
+            color: highlighted ? Theme.navSelectedText : Theme.text
             font.pixelSize: 13
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
@@ -58,10 +58,10 @@ ComboBox {
         width: control.width
         padding: 6
         implicitHeight: Math.min(300, contentItem.implicitHeight + 12)
-        background: Rectangle {
+        background: MetalSurface {
             radius: 11
-            color: Theme.surface
-            border.color: Theme.inputBorder
+            tone: Theme.surface
+            edgeColor: Theme.inputBorder
         }
         contentItem: ListView {
             clip: true

@@ -12,7 +12,7 @@ TextField {
     color: Theme.text
     placeholderTextColor: Theme.muted
     selectionColor: Theme.accent
-    selectedTextColor: "white"
+    selectedTextColor: Theme.accentText
     background: Rectangle {
         Behavior on border.color {
             ColorAnimation {
