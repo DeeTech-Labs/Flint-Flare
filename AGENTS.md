@@ -6,7 +6,7 @@ Act as a Senior C++/Qt Engineer, Desktop Application Architect, UX Engineer, and
 
 FlinT Flare is the desktop companion and application management software for the FlinT ecosystem.
 
-Its responsibilities include:
+Its product responsibilities include the following; this list is not a claim that every workflow is implemented:
 
 - Discovering and connecting FlinT devices.
 - Managing device configuration.
@@ -17,6 +17,8 @@ Its responsibilities include:
 - Displaying device information and capabilities.
 - Providing an extensible Ignite application marketplace.
 - Supporting future FlinT devices and hardware revisions.
+
+Current implementation includes USB/BLE connection, Ignite Hub, Studio, Preview, and the offline simulator. Firmware update delivery and a remote application marketplace are product goals, not currently implemented services; verify capability support before exposing them. `BackgroundAgent` exists for desktop/tray behavior; its presence does not establish device background-service or firmware-update support.
 
 Flare must remain responsive, reliable, cross-platform, and maintainable.
 
@@ -38,7 +40,7 @@ Communicate explanations, reviews, and implementation summaries in Russian. Use 
 Default technology stack:
 
 - C++20.
-- Qt 6.
+- Qt 6.5 or newer; CI selects its version in `.github/workflows/desktop-tests.yml`.
 - Qt Quick / QML.
 - CMake.
 - Windows and Linux as primary targets.
@@ -49,6 +51,8 @@ Use existing dependencies and repository conventions before introducing alternat
 Do not assume a Qt module, framework, library, or API is available without checking the actual project configuration.
 
 Avoid introducing additional UI frameworks when Qt already provides sufficient functionality.
+
+Required CMake modules: Quick, QuickControls2, SerialPort, Bluetooth, Widgets, ShaderTools, and DBus on Linux. QML also uses QtQuick.Dialogs. Studio resource compilation and SDK integration tests need Python 3 and Pillow. CMake minimum: 3.21.
 
 ### Platform Requirements
 
@@ -82,6 +86,18 @@ Existing source code is the implementation source of truth.
 Architectural documentation describes intended behavior but must be verified against the implementation.
 
 If documentation and implementation disagree, report the discrepancy.
+
+### Current Repository Map
+
+- `src/main.cpp` — application entry point and QML/backend wiring.
+- `src/platform_app/` — PlatformClient, IgniteHub, CompanionService, Studio, and Preview.
+- `src/device/` — BLE transport and Linux BlueZ integration; USB is currently handled by PlatformClient.
+- `src/services/` — desktop background/tray integration.
+- `src/localization/` and `translations/` — JSON-backed QTranslator and language catalogs.
+- `qml/`, `assets/`, `shaders/` — presentation and design resources.
+- `platform/` — pinned IgniteSDK Git submodule owning shared Core, Runtime, protocols, and package validation.
+
+Inspect local changes and submodule status before initializing or updating dependencies. A sibling SDK checkout is independent of the revision pinned here; test this consumer against its actual submodule. Do not copy shared SDK sources into Flare or silently update the submodule pointer.
 
 ## 4. Architecture
 
@@ -477,7 +493,7 @@ Users should be able to browse catalog information without requiring a connected
 - Enforce download size limits.
 - Validate URLs and redirects.
 - Prevent unsafe local file writes.
-- Never execute downloaded package code on the host.
+- Never execute package-provided native code, shell commands, or unrestricted scripts on the host. Ignite Lua execution for Preview and the offline simulator is allowed only through the shared bounded SDK Runtime; preserve its sandbox and validation. Merely browsing catalog metadata must not execute package code.
 - Verify package authenticity when supported by the actual trust model.
 - Do not claim verified authenticity when only file integrity was checked.
 
@@ -684,17 +700,18 @@ Measure performance before claiming improvements.
 
 ## 18. Localization
 
-Russian is the primary product language.
+Russian is the canonical documentation language. The UI source language and catalog keys are English; Russian translations live in `translations/ru/`, with English coverage in `translations/en/`.
 
 ### Rules
 
 - All user-visible strings must be localizable.
-- Do not hardcode Russian or English text directly into reusable UI logic.
-- Follow the existing Qt translation mechanism.
+- Keep English source text inside translation calls; do not add untranslated user-visible literals to reusable UI logic. Existing untranslated literals are technical debt, not a localization convention.
+- Use `qsTr()` / `tr()` with the JSON-backed QTranslator in `src/localization/Localization.*`; preserve the `contexts` structure and placeholders. See `docs/ru/LOCALIZATION.md`.
+- Do not introduce `.ts` / `.qm` generation or a LinguistTools dependency for the current JSON catalogs. Update both bundled languages when adding UI strings.
 - Preserve translation identifiers and context where possible.
 - Avoid concatenating translated sentence fragments.
 - Support text expansion.
-- Handle plural forms correctly.
+- The current JSON translator ignores the plural argument `n`. Do not assume Qt plural selection works here; implement and test catalog/translator support before relying on plural forms.
 - Keep technical error identifiers separate from localized messages.
 - Do not expose raw backend identifiers to users unless appropriate.
 
@@ -758,11 +775,19 @@ Do not claim cross-platform compatibility based solely on successful compilation
 
 ### Build Verification
 
-Discover build commands from the actual CMake presets, documentation, and CI workflows.
+Run from the repository root, after checking local/submodule changes and initializing missing dependencies safely:
 
-Do not invent build options, test targets, or dependencies.
+```sh
+cmake -S . -B /tmp/flint-flare -DCMAKE_BUILD_TYPE=Debug
+cmake --build /tmp/flint-flare --parallel 2
+ctest --test-dir /tmp/flint-flare --output-on-failure
+```
 
-Execute relevant checks when available.
+Use a fresh build directory if the path is already configured for another checkout. For a non-system Qt, pass `-DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/<kit>`. Multi-configuration generators require `--config Debug` for the build and `-C Debug` for CTest.
+
+`BUILD_TESTING` controls the desktop smoke test and `FLINT_PLATFORM_TESTS` for the embedded SDK subdirectory. The `desktop_offline` CTest entry runs `flint_flare --smoke` with offscreen/software rendering and a temporary simulator; it does not validate physical USB/BLE or firmware updates. SDK tests come from the pinned `platform/CMakeLists.txt`. There is currently no top-level Python `tests/` suite in Flare; do not claim that an empty unittest discovery validates localization.
+
+Consult `CMakeLists.txt`, `docs/ru/BUILD.md`, and `.github/workflows/desktop-tests.yml` when these commands or dependencies change. Do not invent build options, test targets, or dependencies. Execute relevant checks when available.
 
 Report failures and skipped checks accurately.
 
@@ -810,16 +835,18 @@ Flare is part of a larger platform.
 
 Owns:
 
-- Firmware.
-- Hardware integration.
-- Device-side runtime.
-- Device-side permission enforcement.
-- Device-side installation and recovery.
+- Firmware and hardware integration.
+- ESP-IDF adapters for shared Core and Runtime.
+- Device transport trust and hardware-specific authorization boundaries.
+- Device storage and recovery integration.
+
+Portable runtime execution, package transactions, and permission/consent logic are implemented in IgniteSDK and reused by OS, Flare Preview, and the simulator.
 
 ### IgniteSDK
 
 Owns:
 
+- Shared Core, Runtime, permission enforcement, and package transaction implementation.
 - Shared Ignite contracts.
 - Package specifications.
 - Shared application metadata.
