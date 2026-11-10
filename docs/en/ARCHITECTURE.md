@@ -16,3 +16,5 @@ Demand-driven Companion uses the [shared SDK contract](../../platform/docs/en/CO
 PlatformClient keeps a separate bounded slot and timeout for resumable `install_commit`; ordinary commands and Companion samples continue while the SDK validates the package. The queue holds at most 64 requests, samples coalesce, and management commands precede queued samples. BLE serializes frames and signals readiness for the next frame; callbacks from an old connection generation are ignored.
 
 With `CapSessionClose`, USB shutdown sends `session_close` and asynchronously waits up to 100 ms for its ACK. Late installation replies cannot complete shutdown. Without confirmation, check the installation catalog after reconnecting. The SDK provider lease releases an abandoned binding.
+
+The watch Bluetooth policy is exposed only with `CapBlePolicy`. Flare reads it at handshake, displays confirmed settings and blocks duplicate writes until a reply. Errors preserve the displayed policy. Re-enabling a disabled radio requires USB. Companion consent and Ignite Hub never change this setting.

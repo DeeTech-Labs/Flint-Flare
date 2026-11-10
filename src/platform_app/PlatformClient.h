@@ -10,6 +10,10 @@
 #include <memory>
 class PlatformClient : public QObject {
     Q_OBJECT
+    Q_PROPERTY(bool blePolicySupported READ blePolicySupported NOTIFY changed)
+    Q_PROPERTY(bool blePolicyKnown READ blePolicyKnown NOTIFY changed)
+    Q_PROPERTY(bool blePolicyBusy READ blePolicyBusy NOTIFY changed)
+    Q_PROPERTY(bool bleEnabled READ bleEnabled NOTIFY changed)
     Q_PROPERTY(bool autoSyncTime READ autoSyncTime WRITE setAutoSyncTime NOTIFY changed)
     Q_PROPERTY(bool connecting READ connecting NOTIFY changed)
     Q_PROPERTY(bool connected READ connected NOTIFY changed)
@@ -25,6 +29,19 @@ class PlatformClient : public QObject {
 public:
     using Callback = std::function<void(flint::Error, flint::Bytes)>;
     explicit PlatformClient(QObject *parent = nullptr);
+    bool blePolicySupported() const {
+        return connected_ && (capabilities_ & flint::CapBlePolicy);
+    }
+    bool blePolicyKnown() const {
+        return blePolicyKnown_;
+    }
+    bool blePolicyBusy() const {
+        return blePolicyBusy_;
+    }
+    bool bleEnabled() const {
+        return bleEnabled_;
+    }
+    Q_INVOKABLE void setBleEnabled(bool enabled);
     bool autoSyncTime() const;
     void setAutoSyncTime(bool enabled);
     bool connecting() const {
@@ -91,6 +108,8 @@ private:
         uint64_t queuedAt{};
         uint64_t sentAt{};
     };
+    void refreshBlePolicy();
+    bool bleEnabled_{}, blePolicyKnown_{}, blePolicyBusy_{};
     QSerialPort serial_;
     std::unique_ptr<BleTransport> ble_;
     QTimer timeout_;

@@ -21,6 +21,16 @@ struct PlatformClientTestAccess {
         const auto bytes = flint::encodeFrame(frame);
         client.receive(QByteArray(reinterpret_cast<const char *>(bytes.data()), bytes.size()));
     }
+    static void radioCapability(PlatformClient &client) {
+        client.capabilities_ |= flint::CapBlePolicy;
+        client.refreshBlePolicy();
+    }
+    static void reply(PlatformClient &client, flint::Error error) {
+        const auto frame = client.pending_->frame;
+        flint::Writer result;
+        result.n(uint16_t(error), 2);
+        receive(client, {frame.method, frame.id, true, result.data});
+    }
     static void closing(PlatformClient &client, std::function<void()> done) {
         client.disconnectDevice();
         client.closing_ = true;
@@ -156,6 +166,21 @@ int main(int argc, char **argv) {
     client.startSimulator();
     CHECK(waitFor([&] { return client.connected(); }));
     CHECK(!late && !companion.metricsAllowed());
+    // Only negotiated policy is exposed. Settings are loaded once and reflect confirmed replies.
+    CHECK(!client.blePolicySupported());
+    PlatformClientTestAccess::radioCapability(client);
+    CHECK(waitFor([&] { return client.blePolicyKnown(); }));
+    CHECK(client.bleEnabled());
+    client.setBleEnabled(false);
+    CHECK(client.blePolicyBusy() && client.bleEnabled());
+    PlatformClientTestAccess::reply(client, flint::Error::ok);
+    CHECK(!client.blePolicyBusy() && !client.bleEnabled());
+    QCoreApplication::processEvents();
+    client.setBleEnabled(true);
+    CHECK(client.blePolicyBusy());
+    PlatformClientTestAccess::reply(client, flint::Error::resource_exhausted);
+    CHECK(!client.blePolicyBusy() && !client.bleEnabled());
+    QCoreApplication::processEvents();
     bool closed = false;
     PlatformClientTestAccess::closing(client, [&] { closed = true; });
     PlatformClientTestAccess::usb(client, {flint::Method::info, 200, true, {0, 0}});

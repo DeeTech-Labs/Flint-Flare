@@ -85,7 +85,8 @@
         },
         "PlatformClient": {
             "Disconnecting…": "Отключение…",
-            "Package verification timed out": "Время проверки пакета истекло"
+            "Package verification timed out": "Время проверки пакета истекло",
+            "Invalid device settings": "Некорректные настройки устройства"
         }
     }
 }

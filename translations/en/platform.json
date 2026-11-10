@@ -85,7 +85,8 @@
         },
         "PlatformClient": {
             "Disconnecting…": "Disconnecting…",
-            "Package verification timed out": "Package verification timed out"
+            "Package verification timed out": "Package verification timed out",
+            "Invalid device settings": "Invalid device settings"
         }
     }
 }

@@ -111,6 +111,7 @@ void PlatformClient::resetConnection(std::function<void()> afterClose) {
     timeout_.stop();
     installTimeout_.stop();
     connected_ = false;
+    blePolicyKnown_ = blePolicyBusy_ = false;
     capabilities_ = 0;
     if (core_)
         core_->disconnect(session_);
@@ -173,6 +174,7 @@ void PlatformClient::fail(const QString &message) {
     timeout_.stop();
     installTimeout_.stop();
     connected_ = false;
+    blePolicyKnown_ = blePolicyBusy_ = false;
     capabilities_ = 0;
     queue_.clear();
     pending_.reset();
@@ -214,6 +216,7 @@ void PlatformClient::connectBle(const QString &address) {
         timeout_.stop();
         installTimeout_.stop();
         connected_ = false;
+        blePolicyKnown_ = blePolicyBusy_ = false;
         queue_.clear();
         pending_.reset();
         installPending_.reset();
@@ -319,6 +322,8 @@ void PlatformClient::handshake() {
         status_ = core_ ? "Локальный симулятор" : "Подключено";
         emit changed();
         refreshInfo();
+        if (caps & flint::CapBlePolicy)
+            refreshBlePolicy();
         emit ready();
         if (autoSyncTime())
             syncTime();
@@ -519,6 +524,53 @@ void PlatformClient::refreshInfo() {
             return;
         }
         info_ = info;
+        emit changed();
+    });
+}
+void PlatformClient::refreshBlePolicy() {
+    request(flint::Method::settings_get, {}, [this](auto error, auto data) {
+        if (error != flint::Error::ok) {
+            emit failure(platformError(error));
+            return;
+        }
+        flint::Reader reader{data};
+        const auto count = reader.n(2);
+        if (count > 128) {
+            emit failure(tr("Invalid device settings"));
+            return;
+        }
+        bool enabled = true;
+        for (unsigned i = 0; i < count && reader.valid; ++i) {
+            const auto key = reader.text(64), value = reader.text(192);
+            if (key == "ble_enabled") {
+                if (value != "0" && value != "1")
+                    reader.valid = false;
+                enabled = value == "1";
+            }
+        }
+        if (!reader.done()) {
+            emit failure(tr("Invalid device settings"));
+            return;
+        }
+        bleEnabled_ = enabled;
+        blePolicyKnown_ = true;
+        emit changed();
+    });
+}
+void PlatformClient::setBleEnabled(bool enabled) {
+    if (!blePolicySupported() || !blePolicyKnown_ || blePolicyBusy_)
+        return;
+    flint::Writer writer;
+    writer.text("ble_enabled");
+    writer.text(enabled ? "1" : "0");
+    blePolicyBusy_ = true;
+    emit changed();
+    request(flint::Method::settings_set, writer.data, [this, enabled](auto error, auto) {
+        blePolicyBusy_ = false;
+        if (error != flint::Error::ok)
+            emit failure(platformError(error));
+        else
+            bleEnabled_ = enabled;
         emit changed();
     });
 }
