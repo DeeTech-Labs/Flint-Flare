@@ -7,6 +7,7 @@
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QThread>
+#include <QTimer>
 #include <cstdio>
 
 #define CHECK(x)                                                                                   \
@@ -162,10 +163,16 @@ int main(int argc, char **argv) {
     client.disconnectDevice();
     QCoreApplication::processEvents();
     CHECK(!late && !companion.metricsAllowed());
-    CHECK(companion.diagnostics().value("sample_attempts").toULongLong() == 0);
+    // Diagnostics count the service lifetime, including legitimate Linux samples above.
+    CHECK(companion.diagnostics().value("sample_attempts").toULongLong() == stoppedSamples);
     client.startSimulator();
     CHECK(waitFor([&] { return client.connected(); }));
     CHECK(!late && !companion.metricsAllowed());
+    bool quietIntervalElapsed = false;
+    QTimer::singleShot(
+        flint::CompanionSampleIntervalMs + 50, &app, [&] { quietIntervalElapsed = true; });
+    CHECK(waitFor([&] { return quietIntervalElapsed; }, flint::CompanionSampleIntervalMs + 1000));
+    CHECK(companion.diagnostics().value("sample_attempts").toULongLong() == stoppedSamples);
     // Only negotiated policy is exposed. Settings are loaded once and reflect confirmed replies.
     CHECK(!client.blePolicySupported());
     PlatformClientTestAccess::radioCapability(client);
