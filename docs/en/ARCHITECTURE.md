@@ -18,3 +18,5 @@ PlatformClient keeps a separate bounded slot and timeout for resumable `install_
 With `CapSessionClose`, USB shutdown sends `session_close` and asynchronously waits up to 100 ms for its ACK. Late installation replies cannot complete shutdown. Without confirmation, check the installation catalog after reconnecting. The SDK provider lease releases an abandoned binding.
 
 The watch Bluetooth policy is exposed only with `CapBlePolicy`. Flare reads it at handshake, displays confirmed settings and blocks duplicate writes until a reply. Errors preserve the displayed policy. Re-enabling a disabled radio requires USB. Companion consent and Ignite Hub never change this setting.
+
+Disconnect cancels resumable install verification only before publication starts. Beyond that boundary the SDK completes durable publication and discards the old session reply. After reconnect Hub refreshes the catalog; losing the connection/ACK does not prove installation cancellation. Wire method/request ID and the 45-second timeout are unchanged.
