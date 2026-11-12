@@ -86,7 +86,10 @@
         "PlatformClient": {
             "Disconnecting…": "Отключение…",
             "Package verification timed out": "Время проверки пакета истекло",
-            "Invalid device settings": "Некорректные настройки устройства"
+            "Invalid device settings": "Некорректные настройки устройства",
+            "Time synchronization confirmation timed out": "Не получено подтверждение синхронизации времени",
+            "Invalid time status response": "Некорректный ответ о состоянии времени",
+            "Core time updated, but RTC write failed: %1": "Время Core обновлено, но запись RTC не выполнена: %1"
         }
     }
 }

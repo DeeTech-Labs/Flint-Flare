@@ -3,6 +3,7 @@
 #include "platform_app/IgniteHub.h"
 #include "platform_app/PlatformClient.h"
 #include "platform_app/Preview.h"
+#include "platform_app/Sensors.h"
 #include "platform_app/Studio.h"
 #include "services/BackgroundAgent.h"
 #include <QApplication>
@@ -56,6 +57,7 @@ int main(int argc, char **argv) {
     Preview preview(&client);
     CompanionService companion(&client);
     Studio studio;
+    Sensors sensors(&client);
     QQmlApplicationEngine engine;
     engine.addImageProvider("ignite", new PreviewProvider(&preview));
     engine.rootContext()->setContextProperty("client", &client);
@@ -67,6 +69,7 @@ int main(int argc, char **argv) {
     engine.rootContext()->setContextProperty("preview", &preview);
     engine.rootContext()->setContextProperty("companion", &companion);
     engine.rootContext()->setContextProperty("studio", &studio);
+    engine.rootContext()->setContextProperty("sensors", &sensors);
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed, &app,
         [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
@@ -294,7 +297,8 @@ int main(int argc, char **argv) {
                 window->setWidth(state->page < 7 ? 1320 : 540);
                 window->setProperty("section", state->page % 7);
                 if (state->page % 7 == 1)
-                    window->findChild<QObject *>("watchPage")->setProperty("settingsExpanded", true);
+                    window->findChild<QObject *>("watchPage")
+                        ->setProperty("settingsExpanded", true);
                 if (++state->page == 14) {
                     state->phase = 9;
                     window->setWidth(1320);
@@ -402,7 +406,9 @@ int main(int argc, char **argv) {
         check->start();
         QTimer::singleShot(0, &client, &PlatformClient::startSimulator);
         QTimer::singleShot(15000, &app, [&, state, factoryCount] {
-            fprintf(stderr, "Offline smoke test timed out: %s; phase=%d, packages=%lld/%lld, preview=%s, synced=%d\n",
+            fprintf(stderr,
+                "Offline smoke test timed out: %s; phase=%d, packages=%lld/%lld, preview=%s, "
+                "synced=%d\n",
                 qPrintable(client.status()), state->phase,
                 static_cast<long long>(hub.packages().size()), static_cast<long long>(factoryCount),
                 qPrintable(preview.status()), client.timeSynced());

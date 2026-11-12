@@ -3,6 +3,10 @@ set(FLINT_PLATFORM_DIR "${CMAKE_CURRENT_LIST_DIR}/platform" CACHE PATH "IgniteSD
 if(NOT EXISTS "${FLINT_PLATFORM_DIR}/include/flint/contracts.h")
     message(FATAL_ERROR "Initialize IgniteSDK: git submodule update --init --recursive")
 endif()
+file(READ "${FLINT_PLATFORM_DIR}/include/flint/contracts.h" FLINT_PLATFORM_CONTRACTS)
+if(NOT FLINT_PLATFORM_CONTRACTS MATCHES "ContractRevision[ \t]*=[ \t]*0x20261113[ \t]*;")
+    message(FATAL_ERROR "Flare requires IgniteSDK ContractRevision 0x20261113. The pinned SDK has not been updated yet. Configure explicitly with -DFLINT_PLATFORM_DIR=<path-to-sibling>/Flint-IgniteSDK until a separate SDK commit/submodule pin update is authorized.")
+endif()
 project(FlintFlare VERSION 0.3.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,6 +24,7 @@ get_directory_property(FLINT_FACTORY_DIR DIRECTORY "${FLINT_PLATFORM_DIR}" DEFIN
 get_directory_property(FLINT_EXAMPLES_DIR DIRECTORY "${FLINT_PLATFORM_DIR}" DEFINITION FLINT_EXAMPLES_DIR)
 qt_add_executable(flint_flare
     src/main.cpp
+    src/platform_app/Sensors.cpp src/platform_app/Sensors.h
     src/platform_app/PlatformClient.cpp src/platform_app/PlatformClient.h
     src/platform_app/IgniteHub.cpp src/platform_app/IgniteHub.h
     src/platform_app/Preview.cpp src/platform_app/Preview.h
@@ -127,4 +132,24 @@ if(BUILD_TESTING)
     add_test(NAME studio_icon_resources COMMAND studio_resource_tests
         "${FLINT_PLATFORM_DIR}/examples/icons/project.json")
     set_tests_properties(studio_icon_resources PROPERTIES TIMEOUT 20)
+endif()
+
+if(BUILD_TESTING)
+    qt_add_executable(flare_sensor_tests tests/sensors.cpp
+        src/platform_app/Sensors.cpp src/platform_app/Sensors.h
+        src/platform_app/PlatformClient.cpp src/platform_app/PlatformClient.h
+        src/device/BleTransport.cpp src/device/BleTransport.h
+        src/device/BluezDiscoverySession.cpp src/device/BluezDiscoverySession.h
+        src/device/BluezPairingAgent.cpp src/device/BluezPairingAgent.h)
+    target_include_directories(flare_sensor_tests PRIVATE src)
+    target_link_libraries(flare_sensor_tests PRIVATE Flint::Platform Qt6::SerialPort Qt6::Bluetooth)
+    target_compile_definitions(flare_sensor_tests PRIVATE FLINT_FLARE_VERSION="${PROJECT_VERSION}")
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_compile_definitions(flare_sensor_tests PRIVATE FLINT_BLUEZ_DBUS)
+        target_link_libraries(flare_sensor_tests PRIVATE Qt6::DBus)
+    endif()
+    qt_add_resources(flare_sensor_tests sensor_factory PREFIX "/factory"
+        BASE "${FLINT_FACTORY_DIR}" FILES ${FLINT_FACTORY})
+    add_test(NAME sensor_sessions COMMAND flare_sensor_tests)
+    set_tests_properties(sensor_sessions PROPERTIES TIMEOUT 30)
 endif()

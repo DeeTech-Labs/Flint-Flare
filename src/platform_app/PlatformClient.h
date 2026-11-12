@@ -7,6 +7,7 @@
 #include <QVariantList>
 #include <deque>
 #include <flint/core.h>
+#include <flint/sensor_simulation.h>
 #include <memory>
 class PlatformClient : public QObject {
     Q_OBJECT
@@ -22,6 +23,8 @@ class PlatformClient : public QObject {
     Q_PROPERTY(bool connected READ connected NOTIFY changed)
     Q_PROPERTY(QString transport READ transport NOTIFY changed)
     Q_PROPERTY(bool simulated READ simulated NOTIFY changed)
+    Q_PROPERTY(int virtualBrightness READ virtualBrightness NOTIFY changed)
+    Q_PROPERTY(bool virtualMuted READ virtualMuted NOTIFY changed)
     Q_PROPERTY(QString status READ status NOTIFY changed)
     Q_PROPERTY(QVariantMap info READ info NOTIFY changed)
     Q_PROPERTY(QVariantList ports READ ports NOTIFY changed)
@@ -94,6 +97,18 @@ public:
     }
     flint::Error simulatorInput(flint::InputEvent event);
     Q_INVOKABLE void startSimulator();
+    int virtualBrightness() const {
+        return core_ ? int(virtualBrightness_) : -1;
+    }
+    bool virtualMuted() const {
+        return core_ && virtualMuted_;
+    }
+    Q_INVOKABLE bool setVirtualSensorAvailable(int source, bool available);
+    Q_INVOKABLE bool resetVirtualSensor(int source);
+    Q_INVOKABLE bool setVirtualSensorState(int source, int state);
+    Q_INVOKABLE bool setVirtualSensorValue(
+        int source, int channel, double x, double y = 0, double z = 0);
+    Q_INVOKABLE bool advanceSimulation(int milliseconds);
     Q_INVOKABLE void connectUsb(const QString &port);
     Q_INVOKABLE void scanBle();
     Q_INVOKABLE void connectBle(const QString &address);
@@ -117,6 +132,10 @@ private:
     enum class TimeSyncState { Idle, Pending, Succeeded, Failed };
     TimeSyncState timeSyncState_{TimeSyncState::Idle};
     QString timeSyncError_;
+    uint64_t timeSyncOperation_{};
+    QTimer timeSyncTimeout_;
+    void pollTimeStatus(uint64_t generation, uint64_t operation);
+    void completeTimeSync(bool success, const QString &error = {});
     void resetTimeSync();
     friend struct PlatformClientTestAccess;
     struct Pending {
@@ -150,7 +169,13 @@ private:
     uint64_t capabilities_{};
     uint64_t requests_{}, requestErrors_{}, queueRejected_{}, queuePeak_{}, rxBytes_{}, txBytes_{},
         timeouts_{}, maxQueueMs_{}, maxRequestMs_{};
+    std::unique_ptr<flint::sensors::Simulation> sensorSimulation_;
+    std::array<std::array<flint::sensors::Vector3, 6>, 4> virtualValues_{};
+    uint64_t simulationOffset_{};
+    unsigned virtualBrightness_{};
+    bool virtualMuted_{};
     std::unique_ptr<flint::Core> core_;
+    uint64_t simulationNow() const;
     std::unique_ptr<QTemporaryDir> simulation_;
     flint::Session session_{true, false, 1};
     bool connected_{};

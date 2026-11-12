@@ -8,6 +8,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <chrono>
+#include <cmath>
 #include <limits>
 static uint64_t monotonic() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -24,6 +25,12 @@ QString platformError(flint::Error e) {
     return QString::fromUtf8(i < std::size(names) ? names[i] : "Ошибка протокола");
 }
 PlatformClient::PlatformClient(QObject *parent) : QObject(parent) {
+    timeSyncTimeout_.setSingleShot(true);
+    timeSyncTimeout_.setInterval(5000);
+    connect(&timeSyncTimeout_, &QTimer::timeout, this, [this] {
+        if (timeSyncBusy())
+            completeTimeSync(false, tr("Time synchronization confirmation timed out"));
+    });
     simulationTick_.setSingleShot(true);
     simulationTick_.setTimerType(Qt::PreciseTimer);
     connect(&simulationTick_, &QTimer::timeout, this, [this] {
@@ -281,10 +288,54 @@ void PlatformClient::startSimulatorNow() {
     // Factory binaries are built by the same compiler as the firmware image.
     for (auto &name : QDir(":/factory").entryList({"*.ignit"}, QDir::Files))
         QFile::copy(":/factory/" + name, root + "/factory/" + name);
+    sensorSimulation_ = std::make_unique<flint::sensors::Simulation>();
+    virtualValues_ = {};
+    virtualValues_[0][0].x = 22.0;
+    virtualValues_[0][1].x = 101325.0;
+    virtualValues_[0][2].x = 45.0;
+    virtualValues_[1][3].x = 150.0;
+    virtualValues_[2][4].z = 9.80665;
+    virtualValues_[3][0].x = 36.0;
+    using namespace flint::sensors;
+    sensorSimulation_->add(
+        {1, Mask(bit(Channel::temperature) | bit(Channel::pressure) | bit(Channel::humidity)), 1000,
+            1000, 60000, 5000, 0, true, TemperatureKind::ambient},
+        virtualValues_[0]);
+    sensorSimulation_->add(
+        {2, bit(Channel::ambient_light), 200, 1000, 60000, 5000, 0, true}, virtualValues_[1]);
+    sensorSimulation_->add(
+        {3, Mask(bit(Channel::acceleration) | bit(Channel::angular_velocity)), 100, 200, 60000,
+            2000, 0, true, TemperatureKind::unspecified, Coordinates::device},
+        virtualValues_[2]);
+    sensorSimulation_->add(
+        {4, bit(Channel::temperature), 5000, 5000, 60000, 15000, 10, true, TemperatureKind::die},
+        virtualValues_[3]);
+    simulationOffset_ = 0;
     flint::Platform p;
+    p.sensors = sensorSimulation_.get();
+    virtualBrightness_ = 0;
+    virtualMuted_ = false;
+    auto notifyVirtualOutput = [this] {
+        QTimer::singleShot(0, this, [this, generation = generation_] {
+            if (generation == generation_ && core_)
+                emit changed();
+        });
+    };
+    p.brightness_apply = [this, notifyVirtualOutput](unsigned percent) {
+        if (percent < 5 || percent > 100)
+            return flint::Error::invalid_argument;
+        virtualBrightness_ = percent;
+        notifyVirtualOutput();
+        return flint::Error::ok;
+    };
+    p.mute_apply = [this, notifyVirtualOutput](bool muted) {
+        virtualMuted_ = muted;
+        notifyVirtualOutput();
+        return flint::Error::ok;
+    };
     p.build_id = "desktop-simulator-v1";
     p.memory = {48 * 1024, 0, 4096};
-    p.monotonic = monotonic;
+    p.monotonic = [this] { return simulationNow(); };
     p.free_storage = [] { return uint64_t(1024 * 1024); };
     core_ = std::make_unique<flint::Core>(
         (root + "/packages").toStdString(), (root + "/factory").toStdString(), p);
@@ -577,35 +628,80 @@ void PlatformClient::setBleEnabled(bool enabled) {
     });
 }
 void PlatformClient::resetTimeSync() {
+    ++timeSyncOperation_;
+    timeSyncTimeout_.stop();
     if (timeSyncState_ == TimeSyncState::Idle)
         return;
     timeSyncState_ = TimeSyncState::Idle;
     timeSyncError_.clear();
     emit timeSyncChanged();
 }
+void PlatformClient::completeTimeSync(bool success, const QString &error) {
+    const auto generation = generation_, operation = timeSyncOperation_;
+    timeSyncTimeout_.stop();
+    timeSyncState_ = success ? TimeSyncState::Succeeded : TimeSyncState::Failed;
+    timeSyncError_ = error;
+    emit timeSyncChanged();
+    if (generation != generation_ || operation != timeSyncOperation_ || !connected_)
+        return;
+    if (!success)
+        emit failure(error);
+    else
+        refreshInfo();
+}
 void PlatformClient::syncTime() {
     if (!connected_ || timeSyncBusy())
         return;
-    const auto generation = generation_;
+    const auto generation = generation_, operation = ++timeSyncOperation_;
     timeSyncState_ = TimeSyncState::Pending;
     timeSyncError_.clear();
+    timeSyncTimeout_.start();
     emit timeSyncChanged();
-    if (generation != generation_ || !connected_)
+    if (generation != generation_ || operation != timeSyncOperation_ || !connected_)
         return;
     flint::Writer w;
     w.n(QDateTime::currentSecsSinceEpoch(), 8);
-    request(flint::Method::time_set, w.data, [this](auto e, auto) {
-        const auto generation = generation_;
-        timeSyncState_ = e == flint::Error::ok ? TimeSyncState::Succeeded : TimeSyncState::Failed;
-        timeSyncError_ = e == flint::Error::ok ? QString() : platformError(e);
-        const auto message = timeSyncError_;
-        emit timeSyncChanged();
-        if (generation != generation_ || !connected_)
+    request(flint::Method::time_set, w.data, [this, generation, operation](auto error, auto data) {
+        if (generation != generation_ || operation != timeSyncOperation_ || !connected_ ||
+            !timeSyncBusy())
             return;
-        if (e != flint::Error::ok)
-            emit failure(message);
+        if (error != flint::Error::ok || !data.empty())
+            completeTimeSync(false,
+                error == flint::Error::ok ? tr("Invalid time status response")
+                                          : platformError(error));
         else
-            refreshInfo();
+            pollTimeStatus(generation, operation);
+    });
+}
+void PlatformClient::pollTimeStatus(uint64_t generation, uint64_t operation) {
+    if (generation != generation_ || operation != timeSyncOperation_ || !connected_ ||
+        !timeSyncBusy())
+        return;
+    request(flint::Method::time_status, {}, [this, generation, operation](auto error, auto data) {
+        if (generation != generation_ || operation != timeSyncOperation_ || !connected_ ||
+            !timeSyncBusy())
+            return;
+        if (error != flint::Error::ok) {
+            completeTimeSync(false, platformError(error));
+            return;
+        }
+        flint::Reader r{data};
+        const auto epoch = r.n(8), state = r.n(1), reason = r.n(2);
+        if (!r.done() || epoch < 1700000000 || epoch > 4102444800ULL || state > 3 ||
+            ((state == 0 || state == 2) && reason != 0) || (state == 3 && reason == 0)) {
+            completeTimeSync(false, tr("Invalid time status response"));
+            return;
+        }
+        if (state == 1) {
+            QTimer::singleShot(200, this,
+                [this, generation, operation] { pollTimeStatus(generation, operation); });
+        } else if (state == 3) {
+            completeTimeSync(false,
+                tr("Core time updated, but RTC write failed: %1")
+                    .arg(platformError(flint::Error(reason))));
+        } else {
+            completeTimeSync(true);
+        }
     });
 }
 void PlatformClient::setOffset(const QString &minutes) {
@@ -644,7 +740,7 @@ void PlatformClient::scheduleSimulation() {
         simulationTick_.stop();
         return;
     }
-    const auto at = monotonic();
+    const auto at = simulationNow();
     const auto delay =
         deadline <= at ? 0 : std::min<uint64_t>(deadline - at, std::numeric_limits<int>::max());
     simulationTick_.start(int(delay));
@@ -678,4 +774,58 @@ void PlatformClient::drainSimulationEvents() {
         const auto bytes = flint::encodeFrame(event);
         receive(QByteArray(reinterpret_cast<const char *>(bytes.data()), bytes.size()));
     }
+}
+
+uint64_t PlatformClient::simulationNow() const {
+    const auto now = monotonic();
+    return now > UINT64_MAX - simulationOffset_ ? UINT64_MAX : now + simulationOffset_;
+}
+bool PlatformClient::setVirtualSensorAvailable(int source, bool available) {
+    if (!core_ || !sensorSimulation_ || source < 1 || source > 4)
+        return false;
+    sensorSimulation_->available(uint16_t(source), available);
+    scheduleSimulation();
+    return true;
+}
+bool PlatformClient::resetVirtualSensor(int source) {
+    if (!core_ || !sensorSimulation_ || source < 1 || source > 4)
+        return false;
+    sensorSimulation_->reset(uint16_t(source));
+    scheduleSimulation();
+    return true;
+}
+bool PlatformClient::setVirtualSensorValue(int source, int channel, double x, double y, double z) {
+    constexpr uint8_t masks[]{7, 8, 48, 1};
+    if (!core_ || !sensorSimulation_ || source < 1 || source > 4 || channel < 0 || channel >= 6 ||
+        !(masks[source - 1] & (1u << channel)) || !std::isfinite(x) || !std::isfinite(y) ||
+        !std::isfinite(z))
+        return false;
+    auto values = virtualValues_[source - 1];
+    values[channel] = {x, channel >= 4 ? y : 0, channel >= 4 ? z : 0};
+    if (sensorSimulation_->setValues(uint16_t(source), values) != flint::Error::ok)
+        return false;
+    virtualValues_[source - 1] = values;
+    scheduleSimulation();
+    return true;
+}
+bool PlatformClient::advanceSimulation(int milliseconds) {
+    if (!core_ || milliseconds <= 0 || milliseconds > 86400000 ||
+        simulationOffset_ > UINT64_MAX - uint64_t(milliseconds))
+        return false;
+    simulationOffset_ += uint64_t(milliseconds);
+    if (core_->tick())
+        emit simulationSceneChanged();
+    drainSimulationEvents();
+    scheduleSimulation();
+    return true;
+}
+
+bool PlatformClient::setVirtualSensorState(int source, int state) {
+    if (!core_ || !sensorSimulation_ || source < 1 || source > 4 || state < 0 || state > 5)
+        return false;
+    const auto error = sensorSimulation_->status(uint16_t(source), flint::sensors::Status(state),
+        state == int(flint::sensors::Status::valid) ? flint::Error::ok
+                                                    : flint::Error::source_unavailable);
+    scheduleSimulation();
+    return error == flint::Error::ok;
 }
