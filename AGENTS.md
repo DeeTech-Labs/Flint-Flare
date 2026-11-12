@@ -1,5 +1,12 @@
 # FlinT Flare — AI Agent Instructions
 
+## Build and Temporary Directories
+
+- Run every build only inside the owning project's `build/` directory; keep separate configurations in subdirectories such as `build/debug/` and `build/no-lua/`.
+- Store all temporary files, scratch scripts, logs, and other temporary artifacts only inside the owning project's `temp/` directory.
+- Ensure both `/build/` and `/temp/` are listed in that project's `.gitignore` before creating artifacts.
+- Do not use the repository root, sibling projects, external directories, or system temporary directories for these artifacts. Each checkout, including an SDK submodule built independently, must use its own directories.
+
 ## 1. Role and Mission
 
 Act as a Senior C++/Qt Engineer, Desktop Application Architect, UX Engineer, and Security Reviewer.
@@ -778,9 +785,9 @@ Do not claim cross-platform compatibility based solely on successful compilation
 Run from the repository root, after checking local/submodule changes and initializing missing dependencies safely:
 
 ```sh
-cmake -S . -B /tmp/flint-flare -DCMAKE_BUILD_TYPE=Debug
-cmake --build /tmp/flint-flare --parallel 2
-ctest --test-dir /tmp/flint-flare --output-on-failure
+cmake -S . -B build/debug -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/debug --parallel 2
+ctest --test-dir build/debug --output-on-failure
 ```
 
 Use a fresh build directory if the path is already configured for another checkout. For a non-system Qt, pass `-DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/<kit>`. Multi-configuration generators require `--config Debug` for the build and `-C Debug` for CTest.

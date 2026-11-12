@@ -15,3 +15,6 @@ Thumbs.db
 # Python integration tests
 __pycache__/
 *.pyc
+
+# Project-local build and temporary artifacts
+/temp/

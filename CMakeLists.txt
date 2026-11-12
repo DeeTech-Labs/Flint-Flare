@@ -15,6 +15,9 @@ qt_standard_project_setup(REQUIRES 6.5)
 include(CTest)
 set(FLINT_PLATFORM_TESTS ${BUILD_TESTING} CACHE BOOL "Portable runtime tests" FORCE)
 add_subdirectory("${FLINT_PLATFORM_DIR}" platform)
+# Consume the SDK's build-local outputs, never source-tree package snapshots.
+get_directory_property(FLINT_FACTORY_DIR DIRECTORY "${FLINT_PLATFORM_DIR}" DEFINITION FLINT_FACTORY_DIR)
+get_directory_property(FLINT_EXAMPLES_DIR DIRECTORY "${FLINT_PLATFORM_DIR}" DEFINITION FLINT_EXAMPLES_DIR)
 qt_add_executable(flint_flare
     src/main.cpp
     src/platform_app/PlatformClient.cpp src/platform_app/PlatformClient.h
@@ -42,10 +45,11 @@ foreach(qml_file IN LISTS FLINT_QML)
 endforeach()
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 qt_add_qml_module(flint_flare URI Flint.Flare VERSION 1.0 QML_FILES ${FLINT_QML})
-file(GLOB FLINT_FACTORY CONFIGURE_DEPENDS ${FLINT_PLATFORM_DIR}/factory/*.ignit)
-qt_add_resources(flint_flare factory PREFIX "/factory" BASE "${FLINT_PLATFORM_DIR}/factory" FILES ${FLINT_FACTORY})
-qt_add_resources(flint_flare samples PREFIX "/samples" BASE "${FLINT_PLATFORM_DIR}/examples/pc-monitor" FILES ${FLINT_PLATFORM_DIR}/examples/pc-monitor/sample.ignit)
-qt_add_resources(flint_flare compiler PREFIX "/sdk" BASE "${FLINT_PLATFORM_DIR}/tools" FILES ${FLINT_PLATFORM_DIR}/tools/compile_ignite.py ${FLINT_PLATFORM_DIR}/tools/build_package.py)
+file(GLOB FLINT_FACTORY CONFIGURE_DEPENDS ${FLINT_FACTORY_DIR}/*.ignit)
+qt_add_resources(flint_flare factory PREFIX "/factory" BASE "${FLINT_FACTORY_DIR}" FILES ${FLINT_FACTORY})
+qt_add_resources(flint_flare samples PREFIX "/samples" BASE "${FLINT_EXAMPLES_DIR}/pc-monitor" FILES ${FLINT_EXAMPLES_DIR}/pc-monitor/sample.ignit)
+set(FLINT_COMPILER_SOURCES ${FLINT_PLATFORM_DIR}/tools/compile_ignite.py ${FLINT_PLATFORM_DIR}/tools/build_package.py ${FLINT_PLATFORM_DIR}/tools/flim.py)
+qt_add_resources(flint_flare compiler PREFIX "/sdk" BASE "${FLINT_PLATFORM_DIR}/tools" FILES ${FLINT_COMPILER_SOURCES})
 file(GLOB FLINT_ICONS CONFIGURE_DEPENDS assets/icons/*.svg)
 qt_add_resources(flint_flare icons PREFIX "/icons" BASE "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons" FILES ${FLINT_ICONS})
 file(GLOB FLINT_FONTS CONFIGURE_DEPENDS assets/fonts/*.ttf)
@@ -56,6 +60,7 @@ qt_add_shaders(flint_flare atmosphere PREFIX "/shaders" BASE "${CMAKE_CURRENT_SO
 if(BUILD_TESTING)
     qt_add_executable(companion_tests
         tests/companion.cpp
+        src/platform_app/IgniteHub.cpp src/platform_app/IgniteHub.h
         src/platform_app/PlatformClient.cpp src/platform_app/PlatformClient.h
         src/platform_app/CompanionService.cpp src/platform_app/CompanionService.h
         src/device/BleTransport.cpp src/device/BleTransport.h
@@ -64,17 +69,17 @@ if(BUILD_TESTING)
     target_include_directories(companion_tests PRIVATE src)
     target_link_libraries(companion_tests PRIVATE Flint::Platform Qt6::SerialPort Qt6::Bluetooth)
     target_compile_definitions(companion_tests PRIVATE FLINT_FLARE_VERSION="${PROJECT_VERSION}"
-        FLINT_MONITOR_PACKAGE="${FLINT_PLATFORM_DIR}/examples/pc-monitor/sample.ignit")
+        FLINT_MONITOR_PACKAGE="${FLINT_EXAMPLES_DIR}/pc-monitor/sample.ignit")
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_compile_definitions(companion_tests PRIVATE FLINT_BLUEZ_DBUS)
         target_link_libraries(companion_tests PRIVATE Qt6::DBus)
     endif()
     qt_add_resources(companion_tests companion_factory PREFIX "/factory"
-        BASE "${FLINT_PLATFORM_DIR}/factory" FILES ${FLINT_FACTORY})
+        BASE "${FLINT_FACTORY_DIR}" FILES ${FLINT_FACTORY})
     add_test(NAME companion_sessions COMMAND companion_tests)
     set_tests_properties(companion_sessions PROPERTIES TIMEOUT 30)
     add_test(NAME desktop_offline COMMAND flint_flare --smoke)
-    set_tests_properties(desktop_offline PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software" TIMEOUT 25)
+    set_tests_properties(desktop_offline PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software" TIMEOUT 25 FAIL_REGULAR_EXPRESSION "Binding loop detected")
 endif()
 set_target_properties(flint_flare PROPERTIES WIN32_EXECUTABLE TRUE MACOSX_BUNDLE TRUE MACOSX_BUNDLE_BUNDLE_NAME "Flint Flare" MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}" MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}" MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in" MACOSX_BUNDLE_GUI_IDENTIFIER "labs.deetech.flint.flare")
 include(GNUInstallDirs)
@@ -100,14 +105,26 @@ if(BUILD_TESTING AND FLINT_ENABLE_LUA)
         Qt6::Quick Qt6::SerialPort Qt6::Bluetooth Qt6::Widgets)
     target_compile_definitions(preview_input_tests PRIVATE
         FLINT_FLARE_VERSION="${PROJECT_VERSION}"
-        FLINT_COUNTER_PACKAGE="${FLINT_PLATFORM_DIR}/examples/counter/sample.ignit")
+        FLINT_COUNTER_PACKAGE="${FLINT_EXAMPLES_DIR}/counter/sample.ignit")
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_compile_definitions(preview_input_tests PRIVATE FLINT_BLUEZ_DBUS)
         target_link_libraries(preview_input_tests PRIVATE Qt6::DBus)
     endif()
     qt_add_resources(preview_input_tests test_factory PREFIX "/factory"
-        BASE "${FLINT_PLATFORM_DIR}/factory" FILES ${FLINT_FACTORY})
+        BASE "${FLINT_FACTORY_DIR}" FILES ${FLINT_FACTORY})
     add_test(NAME preview_application_api COMMAND preview_input_tests)
     set_tests_properties(preview_application_api PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software" TIMEOUT 15)
+endif()
+
+if(BUILD_TESTING)
+    qt_add_executable(studio_resource_tests tests/studio_resources.cpp
+        src/platform_app/Studio.cpp src/platform_app/Studio.h)
+    target_include_directories(studio_resource_tests PRIVATE src)
+    target_link_libraries(studio_resource_tests PRIVATE Flint::Platform Qt6::Core)
+    qt_add_resources(studio_resource_tests studio_compiler PREFIX "/sdk"
+        BASE "${FLINT_PLATFORM_DIR}/tools" FILES ${FLINT_COMPILER_SOURCES})
+    add_test(NAME studio_icon_resources COMMAND studio_resource_tests
+        "${FLINT_PLATFORM_DIR}/examples/icons/project.json")
+    set_tests_properties(studio_icon_resources PROPERTIES TIMEOUT 20)
 endif()
