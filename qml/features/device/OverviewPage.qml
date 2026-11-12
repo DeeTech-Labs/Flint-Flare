@@ -10,6 +10,7 @@ AppPage {
     signal connectRequested
     signal watchRequested
     signal facesRequested
+    signal permissionsRequested
     signal companionRequested(int tab)
     DeviceHero {
         Layout.fillWidth: true
@@ -29,11 +30,12 @@ AppPage {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             Layout.preferredWidth: 2
+            Layout.alignment: Qt.AlignTop
             spacing: 12
             RowLayout {
                 Layout.fillWidth: true
                 Label {
-                    text: qsTr("Make room for your day")
+                    text: qsTr("Quick actions")
                     font.pixelSize: 18
                     font.weight: Font.Medium
                     font.letterSpacing: -0.5
@@ -47,6 +49,7 @@ AppPage {
                 columnSpacing: 12
                 rowSpacing: 12
                 QuickAction {
+                    objectName: "hubAction"
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
                     iconName: "grid"
@@ -57,10 +60,11 @@ AppPage {
                 QuickAction {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
+                    objectName: "permissionsAction"
                     iconName: "shield"
                     text: qsTr("Permissions")
                     detail: qsTr("Control each application’s access")
-                    onClicked: page.facesRequested()
+                    onClicked: page.permissionsRequested()
                 }
                 QuickAction {
                     Layout.fillWidth: true
@@ -84,7 +88,6 @@ AppPage {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             Layout.preferredWidth: 1
-            Layout.preferredHeight: 218
             session: page.session
             compact: true
             frameVisible: !page.inSwipeView || page.currentSwipePage

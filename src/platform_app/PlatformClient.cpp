@@ -111,6 +111,7 @@ void PlatformClient::resetConnection(std::function<void()> afterClose) {
     timeout_.stop();
     installTimeout_.stop();
     connected_ = false;
+    resetTimeSync();
     blePolicyKnown_ = blePolicyBusy_ = false;
     capabilities_ = 0;
     if (core_)
@@ -174,6 +175,7 @@ void PlatformClient::fail(const QString &message) {
     timeout_.stop();
     installTimeout_.stop();
     connected_ = false;
+    resetTimeSync();
     blePolicyKnown_ = blePolicyBusy_ = false;
     capabilities_ = 0;
     queue_.clear();
@@ -574,12 +576,34 @@ void PlatformClient::setBleEnabled(bool enabled) {
         emit changed();
     });
 }
+void PlatformClient::resetTimeSync() {
+    if (timeSyncState_ == TimeSyncState::Idle)
+        return;
+    timeSyncState_ = TimeSyncState::Idle;
+    timeSyncError_.clear();
+    emit timeSyncChanged();
+}
 void PlatformClient::syncTime() {
+    if (!connected_ || timeSyncBusy())
+        return;
+    const auto generation = generation_;
+    timeSyncState_ = TimeSyncState::Pending;
+    timeSyncError_.clear();
+    emit timeSyncChanged();
+    if (generation != generation_ || !connected_)
+        return;
     flint::Writer w;
     w.n(QDateTime::currentSecsSinceEpoch(), 8);
     request(flint::Method::time_set, w.data, [this](auto e, auto) {
+        const auto generation = generation_;
+        timeSyncState_ = e == flint::Error::ok ? TimeSyncState::Succeeded : TimeSyncState::Failed;
+        timeSyncError_ = e == flint::Error::ok ? QString() : platformError(e);
+        const auto message = timeSyncError_;
+        emit timeSyncChanged();
+        if (generation != generation_ || !connected_)
+            return;
         if (e != flint::Error::ok)
-            emit failure(platformError(e));
+            emit failure(message);
         else
             refreshInfo();
     });

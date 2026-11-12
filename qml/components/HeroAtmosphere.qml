@@ -7,9 +7,9 @@ Item {
     objectName: "heroAtmosphere"
     property bool active: true
     property real phase: 4.0
-    readonly property bool motionRunning: active && visible && Theme.animations && Window.window !== null && Window.window.visible && Window.window.visibility !== Window.Minimized && Window.window.active
     readonly property bool gpuAvailable: GraphicsInfo.api !== GraphicsInfo.Software && GraphicsInfo.api !== GraphicsInfo.Unknown
-    // The clock is capped at 30 Hz and pauses off-page, minimized or without focus.
+    readonly property bool motionRunning: active && visible && Theme.animations && Window.window !== null && Window.window.visible && Window.window.visibility !== Window.Minimized && Window.window.active
+    // Cap shader updates at 30 Hz and pause when hidden, inactive or motion is disabled.
     Timer {
         objectName: "atmosphereClock"
         interval: 33

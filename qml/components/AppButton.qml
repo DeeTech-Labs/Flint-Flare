@@ -9,8 +9,12 @@ Button {
     property string iconName: ""
     property bool available: true
     property bool busy: false
+    property string accessibleName: text
     enabled: available && !busy
-    Accessible.name: text
+    Accessible.name: accessibleName
+    ToolTip.text: accessibleName
+    ToolTip.visible: hovered && text.length === 0 && accessibleName.length > 0
+    ToolTip.delay: 500
     activeFocusOnTab: true
     implicitHeight: Theme.controlHeight
     implicitWidth: contentItem.implicitWidth + leftPadding + rightPadding

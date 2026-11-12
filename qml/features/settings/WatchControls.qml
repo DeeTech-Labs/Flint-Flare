@@ -71,6 +71,7 @@ AppCard {
             AppButton {
                 iconName: "sync"
                 text: qsTr("Sync time")
+                busy: card.session.timeSyncBusy
                 available: card.session.connected
                 onClicked: card.session.syncTime()
             }

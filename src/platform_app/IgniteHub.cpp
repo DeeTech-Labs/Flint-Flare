@@ -2,6 +2,7 @@
 #include <QCryptographicHash>
 #include <QFile>
 #include <QTemporaryFile>
+#include <algorithm>
 IgniteHub::IgniteHub(PlatformClient *client) : client_(client) {
     connect(client, &PlatformClient::ready, this, &IgniteHub::refresh);
     connect(client, &PlatformClient::disconnected, this, [this] {
@@ -12,6 +13,8 @@ IgniteHub::IgniteHub(PlatformClient *client) : client_(client) {
         packages_.clear();
         permissions_.clear();
         selected_.clear();
+        permissionsMessage_.clear();
+        ++permissionRequest_;
         emit changed();
     });
 }
@@ -84,6 +87,14 @@ void IgniteHub::page(uint32_t offset, uint64_t generation) {
                 return;
             }
             packages_ = incoming_;
+            if (!std::any_of(packages_.cbegin(), packages_.cend(), [this](const auto &entry) {
+                    return entry.toMap().value("id").toString() == selected_;
+                })) {
+                selected_.clear();
+                permissionsMessage_.clear();
+                permissions_.clear();
+                ++permissionRequest_;
+            }
             emit changed();
             if (!selected_.isEmpty())
                 permissionsRefresh();
@@ -92,6 +103,7 @@ void IgniteHub::page(uint32_t offset, uint64_t generation) {
 void IgniteHub::select(const QString &id) {
     selected_ = id;
     permissions_.clear();
+    permissionsMessage_.clear();
     emit changed();
     permissionsRefresh();
 }
@@ -99,14 +111,15 @@ void IgniteHub::permissionsRefresh() {
     if (!client_->connected() || selected_.isEmpty())
         return;
     auto selected = selected_;
+    const auto generation = ++permissionRequest_;
     flint::Writer w;
     w.text(selected.toStdString());
-    client_->request(
-        flint::Method::permissions_get, w.data, [this, selected](auto error, auto bytes) {
-            if (selected != selected_)
+    client_->request(flint::Method::permissions_get, w.data,
+        [this, selected, generation](auto error, auto bytes) {
+            if (generation != permissionRequest_ || selected != selected_)
                 return;
             if (error != flint::Error::ok) {
-                message_ = platformError(error);
+                permissionsMessage_ = platformError(error);
                 emit changed();
                 return;
             }
@@ -130,13 +143,18 @@ void IgniteHub::permissionsRefresh() {
         });
 }
 void IgniteHub::grant(const QString &name, const QString &scope, bool enabled) {
+    if (!client_->connected() || selected_.isEmpty())
+        return;
+    const auto generation = permissionRequest_;
     flint::Writer w;
     w.text(selected_.toStdString());
     w.text(name.toStdString());
     w.text(scope.toStdString());
     w.n(enabled, 1);
-    client_->request(flint::Method::permission_set, w.data, [this](auto e, auto) {
-        message_ = platformError(e);
+    client_->request(flint::Method::permission_set, w.data, [this, generation](auto e, auto) {
+        if (generation != permissionRequest_)
+            return;
+        permissionsMessage_ = platformError(e);
         permissionsRefresh();
         emit changed();
     });

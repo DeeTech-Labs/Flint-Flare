@@ -1,4 +1,5 @@
 #include "platform_app/CompanionService.h"
+#include "platform_app/IgniteHub.h"
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QElapsedTimer>
@@ -26,10 +27,11 @@ struct PlatformClientTestAccess {
         client.capabilities_ |= flint::CapBlePolicy;
         client.refreshBlePolicy();
     }
-    static void reply(PlatformClient &client, flint::Error error) {
+    static void reply(PlatformClient &client, flint::Error error, flint::Bytes data = {}) {
         const auto frame = client.pending_->frame;
         flint::Writer result;
         result.n(uint16_t(error), 2);
+        result.data.insert(result.data.end(), data.begin(), data.end());
         receive(client, {frame.method, frame.id, true, result.data});
     }
     static void closing(PlatformClient &client, std::function<void()> done) {
@@ -44,8 +46,11 @@ struct PlatformClientTestAccess {
         client.receive(
             QByteArray(reinterpret_cast<const char *>(bytes.data()), bytes.size()), true);
     }
+    static void expireRequest(PlatformClient &client) {
+        QMetaObject::invokeMethod(&client.timeout_, "timeout", Qt::DirectConnection);
+    }
     static bool waiting(const PlatformClient &client) {
-        return (client.pending_ && client.timeout_.isActive()) ||
+        return !client.queue_.empty() || (client.pending_ && client.timeout_.isActive()) ||
             (client.installPending_ && client.installTimeout_.isActive());
     }
     static bool installWaiting(const PlatformClient &client) {
@@ -68,6 +73,114 @@ int main(int argc, char **argv) {
     QTemporaryDir preferences;
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, preferences.path());
+    // Synchronization is acknowledged, deduplicated, and scoped to the connection.
+    {
+        PlatformClient syncClient;
+        syncClient.setAutoSyncTime(false);
+        syncClient.syncTime(); // Disconnected actions cannot start an operation.
+        CHECK(!syncClient.timeSyncBusy() && !syncClient.timeSynced());
+        syncClient.startSimulator();
+        CHECK(waitFor([&] { return syncClient.connected() && !syncClient.info().isEmpty(); }));
+        syncClient.syncTime();
+        CHECK(syncClient.timeSyncBusy() && !syncClient.timeSynced());
+        const auto requests = syncClient.diagnostics().value("requests");
+        syncClient.syncTime();
+        CHECK(syncClient.diagnostics().value("requests") == requests);
+        PlatformClientTestAccess::reply(syncClient, flint::Error::permission_denied);
+        CHECK(!syncClient.timeSyncBusy() && !syncClient.timeSynced());
+        CHECK(!syncClient.timeSyncError().isEmpty());
+        syncClient.syncTime();
+        CHECK(syncClient.timeSyncBusy() && syncClient.timeSyncError().isEmpty());
+        CHECK(waitFor([&] { return syncClient.timeSynced(); }));
+        CHECK(!syncClient.timeSyncBusy() && syncClient.timeSyncError().isEmpty());
+        CHECK(waitFor([&] { return !PlatformClientTestAccess::waiting(syncClient); }));
+        syncClient.syncTime();
+        syncClient.disconnectDevice();
+        CHECK(!syncClient.timeSyncBusy() && !syncClient.timeSynced());
+        syncClient.startSimulator();
+        CHECK(waitFor([&] { return syncClient.connected() && !syncClient.info().isEmpty(); }));
+        CHECK(!syncClient.timeSynced()); // An old simulator reply cannot confirm a new session.
+        syncClient.syncTime();
+        PlatformClientTestAccess::expireRequest(syncClient);
+        CHECK(!syncClient.connected() && !syncClient.timeSyncBusy() && !syncClient.timeSynced());
+        CHECK(syncClient.timeSyncError().isEmpty());
+        // A synchronous QML/signal listener can close the session on either notification.
+        syncClient.startSimulator();
+        CHECK(waitFor([&] { return syncClient.connected() && !syncClient.info().isEmpty(); }));
+        auto closeOnPending =
+            QObject::connect(&syncClient, &PlatformClient::timeSyncChanged, &syncClient, [&] {
+                if (syncClient.timeSyncBusy())
+                    syncClient.disconnectDevice();
+            });
+        syncClient.syncTime();
+        CHECK(!syncClient.connected() && syncClient.timeSyncError().isEmpty());
+        CHECK(!syncClient.timeSyncBusy() && !syncClient.timeSynced());
+        QObject::disconnect(closeOnPending);
+        syncClient.startSimulator();
+        CHECK(waitFor([&] { return syncClient.connected() && !syncClient.info().isEmpty(); }));
+        int unexpectedFailures = 0;
+        auto failure = QObject::connect(&syncClient, &PlatformClient::failure, &syncClient,
+            [&](const QString &) { ++unexpectedFailures; });
+        auto closeOnSuccess =
+            QObject::connect(&syncClient, &PlatformClient::timeSyncChanged, &syncClient, [&] {
+                if (syncClient.timeSynced())
+                    syncClient.disconnectDevice();
+            });
+        syncClient.syncTime();
+        CHECK(waitFor([&] { return !syncClient.connected(); }));
+        CHECK(unexpectedFailures == 0 && syncClient.timeSyncError().isEmpty());
+        QObject::disconnect(closeOnSuccess);
+        QObject::disconnect(failure);
+        syncClient.setAutoSyncTime(true);
+        syncClient.startSimulator();
+        CHECK(waitFor([&] { return syncClient.connected() && syncClient.timeSynced(); }));
+        syncClient.disconnectDevice();
+        CHECK(!syncClient.timeSynced());
+    }
+    {
+        PlatformClient permissionClient;
+        permissionClient.setAutoSyncTime(false);
+        IgniteHub hub(&permissionClient);
+        permissionClient.startSimulator();
+        CHECK(waitFor([&] {
+            return hub.packages().size() >= 2 &&
+                !PlatformClientTestAccess::waiting(permissionClient);
+        }));
+        const auto first = hub.packages()[0].toMap().value("id").toString();
+        const auto second = hub.packages()[1].toMap().value("id").toString();
+        hub.select(first);
+        hub.select(second);
+        hub.select(first);
+        flint::Writer stale;
+        stale.n(1, 2);
+        stale.text("stale.permission");
+        stale.text("");
+        stale.n(1, 1);
+        stale.n(1, 1);
+        PlatformClientTestAccess::reply(permissionClient, flint::Error::ok, stale.data);
+        CHECK(hub.selected() == first && hub.permissions().isEmpty());
+        CHECK(waitFor([&] { return !PlatformClientTestAccess::waiting(permissionClient); }));
+        for (const auto &permission : hub.permissions())
+            CHECK(permission.toMap().value("name") != "stale.permission");
+        const auto operationMessage = hub.message();
+        hub.select(first);
+        PlatformClientTestAccess::reply(permissionClient, flint::Error::permission_denied);
+        CHECK(!hub.permissionsMessage().isEmpty() && hub.message() == operationMessage);
+        hub.select(second);
+        CHECK(hub.permissionsMessage().isEmpty());
+        CHECK(waitFor([&] { return !PlatformClientTestAccess::waiting(permissionClient); }));
+        hub.grant("test.permission", "", true);
+        hub.select(first);
+        PlatformClientTestAccess::reply(permissionClient, flint::Error::permission_denied);
+        CHECK(hub.permissionsMessage().isEmpty()); // Result belongs to the previous selection.
+        CHECK(waitFor([&] { return !PlatformClientTestAccess::waiting(permissionClient); }));
+        // A package removed by a refreshed catalog cannot remain the permission target.
+        hub.select("missing.application");
+        hub.refresh();
+        CHECK(waitFor([&] { return hub.selected().isEmpty(); }));
+        CHECK(hub.permissions().isEmpty());
+        permissionClient.disconnectDevice();
+    }
     PlatformClient client;
     CompanionService companion(&client);
     client.setAutoSyncTime(false);

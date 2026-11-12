@@ -9,22 +9,17 @@ Rectangle {
     required property var presentation
     property bool frameVisible: true
     readonly property bool narrow: width < 740
+    readonly property int titlePixelSize: narrow ? 28 : 32
     signal syncRequested
     signal settingsRequested
     signal connectRequested
-    implicitHeight: Math.max(260, words.implicitHeight + 40)
+    implicitHeight: Math.max(200, words.implicitHeight + 40)
     radius: 18
     clip: true
     gradient: Gradient {
         orientation: Gradient.Horizontal
-        GradientStop {
-            position: 0
-            color: Theme.heroStart
-        }
-        GradientStop {
-            position: 1
-            color: Theme.heroEnd
-        }
+        GradientStop { position: 0; color: Theme.heroStart }
+        GradientStop { position: 1; color: Theme.heroEnd }
     }
     border.color: Theme.metalEdge
     border.width: 1
@@ -36,10 +31,11 @@ Rectangle {
         id: words
         anchors.left: parent.left
         anchors.top: parent.top
-        anchors.margins: 22
-        width: hero.narrow ? parent.width - 44 : parent.width * 0.53
+        anchors.margins: 20
+        width: hero.narrow ? parent.width - 40 : parent.width * 0.62
         spacing: 12
         RowLayout {
+            Layout.fillWidth: true
             spacing: 8
             Rectangle {
                 width: 6
@@ -48,25 +44,29 @@ Rectangle {
                 color: hero.session.connected ? Theme.success : Theme.offlineDot
             }
             Label {
-                text: hero.session.transport === "SIMULATOR" && hero.session.connected ? qsTr("Simulator") : hero.session.connected ? qsTr("Connected via %1").arg(hero.session.transport) : hero.presentation.stateLabel
-                font.pixelSize: 12
+                text: hero.session.connected ? (hero.session.simulated ? qsTr("Simulator connected") : qsTr("Connected via %1").arg(hero.session.transport)) : hero.presentation.stateLabel
+                textFormat: Text.PlainText
+                font.pixelSize: 14
                 color: Theme.heroCaption
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
             }
         }
         Label {
-            text: qsTr("Your time.\nYour own rhythm.")
-            font.pixelSize: hero.narrow ? 34 : 42
+            text: hero.session.connected ? (hero.session.simulated ? qsTr("Local simulator") : qsTr("Your watch")) : qsTr("Connect your watch")
+            textFormat: Text.PlainText
+            font.pixelSize: hero.titlePixelSize
             font.weight: Font.DemiBold
-            font.letterSpacing: -2
-            lineHeight: 0.98
+            font.letterSpacing: -0.02 * hero.titlePixelSize
+            lineHeight: 1.05
             color: Theme.heroTitle
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
         }
         Label {
-            text: hero.session.connected ? (hero.session.info.profile || qsTr("Your watch")) : qsTr("A little device. A space of your own.")
+            text: hero.session.connected ? qsTr("Device profile: %1").arg(hero.session.info.profile || qsTr("Unavailable")) : qsTr("Connect via USB or Bluetooth, or try the simulator.")
             textFormat: Text.PlainText
-            font.pixelSize: 13
+            font.pixelSize: 14
             color: Theme.heroText
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
@@ -78,11 +78,10 @@ Rectangle {
             spacing: 10
             AppButton {
                 visible: hero.session.connected
-                iconName: "sync"
-                text: qsTr("Sync time")
+                iconName: "settings"
+                text: qsTr("Watch settings")
                 primary: true
-                available: hero.session.connected
-                onClicked: hero.syncRequested()
+                onClicked: hero.settingsRequested()
             }
             AppButton {
                 visible: !hero.session.connected
@@ -92,20 +91,26 @@ Rectangle {
                 onClicked: hero.connectRequested()
             }
             AppButton {
-                iconName: "settings"
-                text: qsTr("Make it yours")
-                onClicked: hero.settingsRequested()
+                objectName: "syncTimeButton"
+                visible: hero.session.connected
+                iconName: "sync"
+                text: hero.session.timeSyncBusy ? qsTr("Syncing…") : qsTr("Sync time")
+                busy: hero.session.timeSyncBusy
+                available: hero.session.connected
+                onClicked: hero.syncRequested()
             }
         }
-    }
-    Label {
-        visible: !hero.narrow
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.margins: 20
-        text: "F L I N T   /   " + (hero.session.info.active || "FLARE")
-        font.pixelSize: 10
-        color: Theme.heroFooter
-        textFormat: Text.PlainText
+        Label {
+            objectName: "timeSyncFeedback"
+            visible: hero.session.connected && (hero.session.timeSyncBusy || hero.session.timeSynced || hero.session.timeSyncError.length > 0)
+            text: hero.session.timeSyncBusy ? qsTr("Synchronizing time…") : hero.session.timeSyncError.length > 0 ? qsTr("Time sync failed: %1").arg(hero.session.timeSyncError) : hero.session.timeSynced ? qsTr("Time synchronized") : ""
+            textFormat: Text.PlainText
+            font.pixelSize: 13
+            color: hero.session.timeSyncError.length > 0 ? Theme.error : Theme.heroText
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+        }
     }
 }

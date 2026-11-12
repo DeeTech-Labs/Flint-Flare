@@ -6,6 +6,7 @@ class IgniteHub : public QObject {
     Q_PROPERTY(QVariantList packages READ packages NOTIFY changed)
     Q_PROPERTY(QVariantList permissions READ permissions NOTIFY changed)
     Q_PROPERTY(QString selected READ selected NOTIFY changed)
+    Q_PROPERTY(QString permissionsMessage READ permissionsMessage NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
     Q_PROPERTY(double progress READ progress NOTIFY changed)
     Q_PROPERTY(QString message READ message NOTIFY changed)
@@ -19,6 +20,9 @@ public:
     }
     QString selected() const {
         return selected_;
+    }
+    QString permissionsMessage() const {
+        return permissionsMessage_;
     }
     bool busy() const {
         return busy_;
@@ -44,12 +48,13 @@ signals:
 private:
     PlatformClient *client_;
     QVariantList packages_, permissions_, incoming_;
-    QString selected_, message_;
+    QString selected_, message_, permissionsMessage_;
     bool busy_{};
     double progress_{};
     QByteArray install_;
     uint32_t offset_{};
     uint64_t catalogRequest_{};
+    uint64_t permissionRequest_{};
     void page(uint32_t offset, uint64_t generation);
     void chunk();
     void result(flint::Error error);
