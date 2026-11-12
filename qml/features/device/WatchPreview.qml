@@ -10,9 +10,12 @@ MetalSurface {
     property bool compact: false
     property bool frameVisible: true
     property int zoom: 0
-    implicitHeight: compact ? 280 : 410
+    objectName: compact ? "overviewPreview" : "watchPreview"
+    implicitHeight: Math.max(compact ? 250 : 410, content.implicitHeight + 32)
     implicitWidth: 300
     tone: Theme.surface
+    subtle: true
+    raised: false
     radius: 12
     FileDialog {
         id: captureDialog
@@ -22,6 +25,7 @@ MetalSurface {
         onAccepted: preview.capture(selectedFile)
     }
     ColumnLayout {
+        id: content
         anchors.fill: parent
         anchors.margins: 16
         spacing: 10
@@ -93,6 +97,7 @@ MetalSurface {
             visible: card.frameVisible
         }
         Caption {
+            objectName: "previewStatus"
             text: preview.status || qsTr("Connect a watch or start the local simulator")
             Layout.fillWidth: true
         }

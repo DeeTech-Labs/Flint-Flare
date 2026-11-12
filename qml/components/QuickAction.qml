@@ -34,7 +34,7 @@ Button {
                 font.family: Theme.fontFamily
                 text: tile.text
                 color: Theme.text
-                font.pixelSize: 13
+                font.pixelSize: 14
                 font.weight: Font.DemiBold
                 Layout.fillWidth: true
                 elide: Text.ElideRight
@@ -43,7 +43,7 @@ Button {
                 font.family: Theme.fontFamily
                 text: tile.detail
                 color: Theme.muted
-                font.pixelSize: 11
+                font.pixelSize: 13
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
             }
@@ -56,6 +56,8 @@ Button {
         }
     }
     background: MetalSurface {
+        subtle: true
+        raised: false
         radius: 12
         tone: tile.down ? Theme.metric : tile.hovered ? Theme.buttonHover : Theme.surface
         edgeColor: tile.visualFocus ? Theme.accent : tile.hovered ? Theme.metalEdge : Theme.divider

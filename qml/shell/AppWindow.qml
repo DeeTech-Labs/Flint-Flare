@@ -70,7 +70,7 @@ ApplicationWindow {
     }
     Shortcut {
         sequence: "Alt+3"
-        onActivated: app.section = 2
+        onActivated: { gallery.currentTab = 0; app.section = 2; }
     }
     Shortcut {
         sequence: "Alt+4"
@@ -98,7 +98,10 @@ ApplicationWindow {
             session: client
             compact: app.compact
             currentIndex: app.section
-            onSelected: index => app.section = index
+            onSelected: index => {
+                if (index === 2) gallery.currentTab = 0;
+                app.section = index;
+            }
             Layout.fillWidth: app.compact
             Layout.fillHeight: !app.compact
             Layout.preferredWidth: app.compact ? -1 : 60
@@ -117,8 +120,10 @@ ApplicationWindow {
                 RowLayout {
                     Layout.fillWidth: true
                     AppButton {
+                        objectName: "backButton"
                         iconName: "left"
                         text: ""
+                        accessibleName: qsTr("Back")
                         available: app.historyPosition > 0
                         onClicked: app.goBack()
                     }
@@ -130,6 +135,8 @@ ApplicationWindow {
                         wrapMode: Text.WordWrap
                     }
                     AppButton {
+                        objectName: "connectionButton"
+                        accessibleName: qsTr("Manage connection")
                         iconName: client.transport === "BLE" ? "bluetooth" : "connection"
                         text: app.compact ? "" : client.connected ? client.transport : qsTr("Connect")
                         onClicked: app.section = 6
@@ -142,6 +149,11 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     currentIndex: app.section
+                    Binding {
+                        target: pages.contentItem
+                        property: "highlightMoveDuration"
+                        value: Theme.animationDuration
+                    }
                     onCurrentIndexChanged: if (app.section !== currentIndex)
                         app.section = currentIndex
                     OverviewPage {
@@ -149,14 +161,15 @@ ApplicationWindow {
                         presentation: presentation
                         onConnectRequested: app.section = 6
                         onWatchRequested: app.section = 1
-                        onFacesRequested: app.section = 2
+                        onFacesRequested: { gallery.currentTab = 0; app.section = 2; }
+                        onPermissionsRequested: { gallery.currentTab = 1; app.section = 2; }
                         onCompanionRequested: app.section = 3
                     }
                     WatchSettingsPage {
                         session: client
                         onConnectRequested: app.section = 6
                     }
-                    FaceGalleryPage {}
+                    FaceGalleryPage { id: gallery; objectName: "igniteHubPage" }
                     CompanionPage {}
                     DiagnosticsPage {
                         session: client

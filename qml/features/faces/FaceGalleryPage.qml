@@ -6,6 +6,54 @@ import Flint.Flare
 
 AppPage {
     id: page
+    property alias currentTab: tabs.currentIndex
+    positionKey: String(currentTab)
+    SectionTabs {
+        id: tabs
+        Layout.fillWidth: true
+        labels: [qsTr("Installed applications"), qsTr("Permissions")]
+    }
+    AppCard {
+        visible: page.currentTab === 1
+        Layout.fillWidth: true
+        implicitHeight: selection.implicitHeight + topPadding + bottomPadding
+        ColumnLayout {
+            id: selection
+            anchors.fill: parent
+            spacing: 12
+            Label {
+                text: qsTr("Application permissions")
+                font.pixelSize: 20
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+            Caption {
+                text: client.connected ? qsTr("Choose an installed application to review its access.") : qsTr("Connect a watch or start the simulator to manage permissions.")
+                Layout.fillWidth: true
+            }
+            AppComboBox {
+                id: permissionPicker
+                objectName: "permissionApplicationPicker"
+                Layout.fillWidth: true
+                model: hub.packages
+                textRole: "name"
+                valueRole: "id"
+                currentIndex: {
+                    for (let i = 0; i < hub.packages.length; ++i)
+                        if (hub.packages[i].id === hub.selected) return i;
+                    return -1;
+                }
+                enabled: client.connected && count > 0
+                Accessible.name: qsTr("Application")
+                onActivated: if (currentIndex >= 0) hub.select(currentValue)
+            }
+        }
+    }
+    Caption {
+        visible: page.currentTab === 1 && hub.permissionsMessage.length > 0
+        text: hub.permissionsMessage
+        Layout.fillWidth: true
+    }
     FileDialog {
         id: install
         title: qsTr("Install Ignite")
@@ -14,21 +62,33 @@ AppPage {
     }
     Dialog {
         id: consent
+        objectName: "permissionConsent"
         parent: Overlay.overlay
         anchors.centerIn: parent
         width: Math.min(500, parent.width - 32)
         modal: true
         title: qsTr("Application permission")
         property string permissionName
+        property string packageId
         property string scopeName
         property bool enable
         standardButtons: Dialog.Ok | Dialog.Cancel
         contentItem: Label {
-            text: hub.selected + "\n" + consent.permissionName + "\n" + (consent.scopeName || qsTr("Own data")) + "\n\n" + (consent.enable ? qsTr("Allow this access? You can revoke it here.") : qsTr("Revoke this access?"))
+            text: consent.packageId + "\n" + consent.permissionName + "\n" + (consent.scopeName || qsTr("Own data")) + "\n\n" + (consent.enable ? qsTr("Allow this access? You can revoke it here.") : qsTr("Revoke this access?"))
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
         }
-        onAccepted: hub.grant(permissionName, scopeName, enable)
+        onAccepted: if (client.connected && hub.selected === packageId) hub.grant(permissionName, scopeName, enable)
+    }
+    Connections {
+        target: client
+        function onDisconnected() { consent.close(); }
+    }
+    Connections {
+        target: hub
+        function onChanged() {
+            if (consent.visible && hub.selected !== consent.packageId) consent.close();
+        }
     }
     Dialog {
         id: removal
@@ -47,6 +107,8 @@ AppPage {
         onAccepted: hub.remove(packageId)
     }
     RowLayout {
+        objectName: "hubOperationStatus"
+        visible: page.currentTab === 0 || hub.busy
         Layout.fillWidth: true
         Caption {
             text: hub.message
@@ -72,7 +134,7 @@ AppPage {
         }
     }
     Repeater {
-        model: hub.packages
+        model: page.currentTab === 0 ? hub.packages : []
         delegate: AppCard {
             id: packageCard
             required property var modelData
@@ -136,7 +198,7 @@ AppPage {
                     AppButton {
                         iconName: "shield"
                         text: qsTr("Permissions")
-                        onClicked: hub.select(packageCard.modelData.id)
+                        onClicked: { hub.select(packageCard.modelData.id); page.currentTab = 1; }
                     }
                     AppButton {
                         visible: !packageCard.modelData.factory
@@ -158,7 +220,8 @@ AppPage {
         }
     }
     AppCard {
-        visible: hub.selected.length > 0
+        objectName: "applicationPermissions"
+        visible: page.currentTab === 1 && permissionPicker.currentIndex >= 0
         Layout.fillWidth: true
         implicitHeight: permissions.implicitHeight + topPadding + bottomPadding
         ColumnLayout {
@@ -187,6 +250,7 @@ AppPage {
                         text: modelData.enabled ? qsTr("Revoke") : qsTr("Allow")
                         available: modelData.access > 0 && modelData.access < 4
                         onClicked: {
+                            consent.packageId = hub.selected;
                             consent.permissionName = modelData.name;
                             consent.scopeName = modelData.scope;
                             consent.enable = !modelData.enabled;
@@ -198,6 +262,7 @@ AppPage {
         }
     }
     FaceStudioEditor {
+        visible: page.currentTab === 0
         Layout.fillWidth: true
     }
 }

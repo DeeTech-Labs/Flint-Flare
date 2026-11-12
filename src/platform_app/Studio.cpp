@@ -3,7 +3,7 @@
 #include <QFileInfo>
 #include <QStandardPaths>
 Studio::Studio(QObject *parent) : QObject(parent) {
-    for (auto name : {"compile_ignite.py", "build_package.py"})
+    for (auto name : {"compile_ignite.py", "build_package.py", "flim.py"})
         QFile::copy(QString(":/sdk/") + name, tools_.path() + "/" + name);
     connect(&process_, &QProcess::finished, this, [this](int code, QProcess::ExitStatus status) {
         message_ = code == 0 && status == QProcess::NormalExit
@@ -29,9 +29,17 @@ void Studio::build(const QUrl &source, const QUrl &output) {
     }
     output_ = output;
     message_ = "Компиляция…";
+#ifdef Q_OS_WIN
+    // Windows commonly provides a python3 App Execution Alias even when the
+    // installed interpreter is python.exe. Prefer the installed command.
+    QString python = QStandardPaths::findExecutable("python");
+    if (python.isEmpty())
+        python = QStandardPaths::findExecutable("python3");
+#else
     QString python = QStandardPaths::findExecutable("python3");
     if (python.isEmpty())
         python = QStandardPaths::findExecutable("python");
+#endif
     if (python.isEmpty()) {
         message_ = tr("Python 3 is required to build Ignite packages.");
         emit changed();

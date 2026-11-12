@@ -15,6 +15,9 @@ class PlatformClient : public QObject {
     Q_PROPERTY(bool blePolicyBusy READ blePolicyBusy NOTIFY changed)
     Q_PROPERTY(bool bleEnabled READ bleEnabled NOTIFY changed)
     Q_PROPERTY(bool autoSyncTime READ autoSyncTime WRITE setAutoSyncTime NOTIFY changed)
+    Q_PROPERTY(bool timeSyncBusy READ timeSyncBusy NOTIFY timeSyncChanged)
+    Q_PROPERTY(bool timeSynced READ timeSynced NOTIFY timeSyncChanged)
+    Q_PROPERTY(QString timeSyncError READ timeSyncError NOTIFY timeSyncChanged)
     Q_PROPERTY(bool connecting READ connecting NOTIFY changed)
     Q_PROPERTY(bool connected READ connected NOTIFY changed)
     Q_PROPERTY(QString transport READ transport NOTIFY changed)
@@ -44,6 +47,15 @@ public:
     Q_INVOKABLE void setBleEnabled(bool enabled);
     bool autoSyncTime() const;
     void setAutoSyncTime(bool enabled);
+    bool timeSyncBusy() const {
+        return timeSyncState_ == TimeSyncState::Pending;
+    }
+    bool timeSynced() const {
+        return timeSyncState_ == TimeSyncState::Succeeded;
+    }
+    QString timeSyncError() const {
+        return timeSyncError_;
+    }
     bool connecting() const {
         return !closing_ && !connected_ && (serial_.isOpen() || (ble_ && ble_->active()));
     }
@@ -94,6 +106,7 @@ public:
     Q_INVOKABLE void pairing(const QString &action);
 signals:
     void changed();
+    void timeSyncChanged();
     void ready();
     void disconnected();
     void failure(const QString &message);
@@ -101,6 +114,10 @@ signals:
     void companionState(qulonglong generation, int state, int intervalMs);
 
 private:
+    enum class TimeSyncState { Idle, Pending, Succeeded, Failed };
+    TimeSyncState timeSyncState_{TimeSyncState::Idle};
+    QString timeSyncError_;
+    void resetTimeSync();
     friend struct PlatformClientTestAccess;
     struct Pending {
         flint::Frame frame;

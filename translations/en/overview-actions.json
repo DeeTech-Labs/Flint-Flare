@@ -1,0 +1,26 @@
+{
+    "contexts": {
+        "AppWindow": {
+            "Manage connection": "Manage connection"
+        },
+        "DeviceHero": {
+            "Simulator connected": "Simulator connected",
+            "Local simulator": "Local simulator",
+            "Device profile: %1": "Device profile: %1",
+            "Unavailable": "Unavailable",
+            "Connect via USB or Bluetooth, or try the simulator.": "Connect via USB or Bluetooth, or try the simulator.",
+            "Watch settings": "Watch settings",
+            "Syncing…": "Syncing…",
+            "Synchronizing time…": "Synchronizing time…",
+            "Time sync failed: %1": "Time sync failed: %1",
+            "Time synchronized": "Time synchronized"
+        },
+        "FaceGalleryPage": {
+            "Installed applications": "Installed applications",
+            "Application permissions": "Application permissions",
+            "Choose an installed application to review its access.": "Choose an installed application to review its access.",
+            "Connect a watch or start the simulator to manage permissions.": "Connect a watch or start the simulator to manage permissions.",
+            "Application": "Application"
+        }
+    }
+}

@@ -1,0 +1,26 @@
+{
+    "contexts": {
+        "AppWindow": {
+            "Manage connection": "Управление подключением"
+        },
+        "DeviceHero": {
+            "Simulator connected": "Симулятор подключён",
+            "Local simulator": "Локальный симулятор",
+            "Device profile: %1": "Профиль устройства: %1",
+            "Unavailable": "Нет данных",
+            "Connect via USB or Bluetooth, or try the simulator.": "Подключите часы по USB или Bluetooth либо попробуйте симулятор.",
+            "Watch settings": "Настройки часов",
+            "Syncing…": "Синхронизация…",
+            "Synchronizing time…": "Синхронизация времени…",
+            "Time sync failed: %1": "Не удалось синхронизировать время: %1",
+            "Time synchronized": "Время синхронизировано"
+        },
+        "FaceGalleryPage": {
+            "Installed applications": "Установленные приложения",
+            "Application permissions": "Разрешения приложений",
+            "Choose an installed application to review its access.": "Выберите установленное приложение, чтобы проверить его доступ.",
+            "Connect a watch or start the simulator to manage permissions.": "Подключите часы или запустите симулятор для управления разрешениями.",
+            "Application": "Приложение"
+        }
+    }
+}
