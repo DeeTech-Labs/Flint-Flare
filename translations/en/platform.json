@@ -89,7 +89,25 @@
             "Invalid device settings": "Invalid device settings",
             "Time synchronization confirmation timed out": "Time synchronization confirmation timed out",
             "Invalid time status response": "Invalid time status response",
-            "Core time updated, but RTC write failed: %1": "Core time updated, but RTC write failed: %1"
+            "Core time updated, but RTC write failed: %1": "Core time updated, but RTC write failed: %1",
+            "State conflict": "State conflict",
+            "Done": "Done",
+            "Invalid request": "Invalid request",
+            "Invalid package": "Invalid package",
+            "Incompatible build": "Incompatible build",
+            "Not supported": "Not supported",
+            "Permission denied": "Permission denied",
+            "User consent required": "User consent required",
+            "Source unavailable": "Source unavailable",
+            "Cancelled": "Cancelled",
+            "Quota exceeded": "Quota exceeded",
+            "Resources exhausted": "Resources exhausted",
+            "Storage error": "Storage error",
+            "Integrity failure": "Integrity failure",
+            "Invalid state": "Invalid state",
+            "Stale handle": "Stale handle",
+            "Execution limit exceeded": "Execution limit exceeded",
+            "Protocol error": "Protocol error"
         }
     }
 }

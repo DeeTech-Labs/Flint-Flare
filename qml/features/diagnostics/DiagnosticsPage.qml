@@ -34,6 +34,7 @@ AppPage {
             if (page.sensorIndex >= sensors.sources.length) page.sensorIndex = 0;
         }
     }
+    BackgroundServicesPanel { panelActive: page.sensorPanelActive }
     AppCard {
         Layout.fillWidth: true
         implicitHeight: sensorContent.implicitHeight + topPadding + bottomPadding

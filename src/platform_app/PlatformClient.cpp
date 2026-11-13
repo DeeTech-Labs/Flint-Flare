@@ -15,15 +15,18 @@ static uint64_t monotonic() {
         std::chrono::steady_clock::now().time_since_epoch())
         .count();
 }
-QString platformError(flint::Error e) {
-    static const char *names[] = {"Готово", "Некорректный запрос", "Повреждённый пакет",
-        "Несовместимая сборка", "Не поддерживается", "Доступ запрещён",
-        "Требуется согласие пользователя", "Источник недоступен", "Отменено", "Превышена квота",
-        "Недостаточно памяти", "Ошибка хранения", "Нарушена целостность", "Некорректное состояние",
-        "Устаревший ресурс", "Превышен лимит выполнения"};
-    auto i = unsigned(e);
-    return QString::fromUtf8(i < std::size(names) ? names[i] : "Ошибка протокола");
+QString platformError(flint::Error error) {
+    static const char *const names[] = {"Done", "Invalid request", "Invalid package",
+        "Incompatible build", "Not supported", "Permission denied", "User consent required",
+        "Source unavailable", "Cancelled", "Quota exceeded", "Resources exhausted", "Storage error",
+        "Integrity failure", "Invalid state", "Stale handle", "Execution limit exceeded",
+        "State conflict"};
+    static_assert(std::size(names) == unsigned(flint::Error::conflict) + 1);
+    const auto index = unsigned(error);
+    return QCoreApplication::translate(
+        "PlatformClient", index < std::size(names) ? names[index] : "Protocol error");
 }
+
 PlatformClient::PlatformClient(QObject *parent) : QObject(parent) {
     timeSyncTimeout_.setSingleShot(true);
     timeSyncTimeout_.setInterval(5000);
@@ -332,6 +335,19 @@ void PlatformClient::startSimulatorNow() {
         virtualMuted_ = muted;
         notifyVirtualOutput();
         return flint::Error::ok;
+    };
+#ifdef FLINT_ENABLE_LUA
+    p.capabilities |= flint::CapBackground | flint::CapComponentIpc;
+    p.background.maxServices = 2;
+    p.background.memoryBytes = 131072;
+    p.background_available_memory = [] { return flint::MemoryBudget{512 * 1024, 0, 4096}; };
+#endif
+    virtualLowEnergy_ = false;
+    p.background_low_energy = [this] { return virtualLowEnergy_; };
+    p.microseconds = [] {
+        return uint64_t(std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+                .count());
     };
     p.build_id = "desktop-simulator-v1";
     p.memory = {48 * 1024, 0, 4096};
@@ -828,4 +844,15 @@ bool PlatformClient::setVirtualSensorState(int source, int state) {
                                                     : flint::Error::source_unavailable);
     scheduleSimulation();
     return error == flint::Error::ok;
+}
+
+void PlatformClient::setVirtualLowEnergy(bool enabled) {
+    if (!core_ || !connected_ || virtualLowEnergy_ == enabled)
+        return;
+    virtualLowEnergy_ = enabled;
+    if (core_->tick())
+        emit simulationSceneChanged();
+    drainSimulationEvents();
+    scheduleSimulation();
+    emit changed();
 }

@@ -25,6 +25,7 @@ class PlatformClient : public QObject {
     Q_PROPERTY(bool simulated READ simulated NOTIFY changed)
     Q_PROPERTY(int virtualBrightness READ virtualBrightness NOTIFY changed)
     Q_PROPERTY(bool virtualMuted READ virtualMuted NOTIFY changed)
+    Q_PROPERTY(bool virtualLowEnergy READ virtualLowEnergy WRITE setVirtualLowEnergy NOTIFY changed)
     Q_PROPERTY(QString status READ status NOTIFY changed)
     Q_PROPERTY(QVariantMap info READ info NOTIFY changed)
     Q_PROPERTY(QVariantList ports READ ports NOTIFY changed)
@@ -103,6 +104,10 @@ public:
     bool virtualMuted() const {
         return core_ && virtualMuted_;
     }
+    bool virtualLowEnergy() const {
+        return core_ && virtualLowEnergy_;
+    }
+    void setVirtualLowEnergy(bool enabled);
     Q_INVOKABLE bool setVirtualSensorAvailable(int source, bool available);
     Q_INVOKABLE bool resetVirtualSensor(int source);
     Q_INVOKABLE bool setVirtualSensorState(int source, int state);
@@ -173,7 +178,7 @@ private:
     std::array<std::array<flint::sensors::Vector3, 6>, 4> virtualValues_{};
     uint64_t simulationOffset_{};
     unsigned virtualBrightness_{};
-    bool virtualMuted_{};
+    bool virtualMuted_{}, virtualLowEnergy_{};
     std::unique_ptr<flint::Core> core_;
     uint64_t simulationNow() const;
     std::unique_ptr<QTemporaryDir> simulation_;

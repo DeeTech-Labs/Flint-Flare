@@ -4,8 +4,8 @@ if(NOT EXISTS "${FLINT_PLATFORM_DIR}/include/flint/contracts.h")
     message(FATAL_ERROR "Initialize IgniteSDK: git submodule update --init --recursive")
 endif()
 file(READ "${FLINT_PLATFORM_DIR}/include/flint/contracts.h" FLINT_PLATFORM_CONTRACTS)
-if(NOT FLINT_PLATFORM_CONTRACTS MATCHES "ContractRevision[ \t]*=[ \t]*0x20261113[ \t]*;")
-    message(FATAL_ERROR "Flare requires IgniteSDK ContractRevision 0x20261113. The pinned SDK has not been updated yet. Configure explicitly with -DFLINT_PLATFORM_DIR=<path-to-sibling>/Flint-IgniteSDK until a separate SDK commit/submodule pin update is authorized.")
+if(NOT FLINT_PLATFORM_CONTRACTS MATCHES "ContractRevision[ \t]*=[ \t]*0x20261114[ \t]*;")
+    message(FATAL_ERROR "Flare requires IgniteSDK ContractRevision 0x20261114. Initialize the checked-in platform submodule, or configure FLINT_PLATFORM_DIR to a compatible checkout. Existing sibling SDK overrides must be updated explicitly.")
 endif()
 project(FlintFlare VERSION 0.3.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
@@ -24,6 +24,7 @@ get_directory_property(FLINT_FACTORY_DIR DIRECTORY "${FLINT_PLATFORM_DIR}" DEFIN
 get_directory_property(FLINT_EXAMPLES_DIR DIRECTORY "${FLINT_PLATFORM_DIR}" DEFINITION FLINT_EXAMPLES_DIR)
 qt_add_executable(flint_flare
     src/main.cpp
+    src/platform_app/BackgroundServices.cpp src/platform_app/BackgroundServices.h
     src/platform_app/Sensors.cpp src/platform_app/Sensors.h
     src/platform_app/PlatformClient.cpp src/platform_app/PlatformClient.h
     src/platform_app/IgniteHub.cpp src/platform_app/IgniteHub.h
@@ -152,4 +153,32 @@ if(BUILD_TESTING)
         BASE "${FLINT_FACTORY_DIR}" FILES ${FLINT_FACTORY})
     add_test(NAME sensor_sessions COMMAND flare_sensor_tests)
     set_tests_properties(sensor_sessions PROPERTIES TIMEOUT 30)
+endif()
+
+if(BUILD_TESTING AND FLINT_ENABLE_LUA)
+    qt_add_executable(background_service_tests tests/background_services.cpp
+        src/platform_app/BackgroundServices.cpp src/platform_app/BackgroundServices.h
+        src/platform_app/IgniteHub.cpp src/platform_app/IgniteHub.h
+        src/platform_app/PlatformClient.cpp src/platform_app/PlatformClient.h
+        src/device/BleTransport.cpp src/device/BleTransport.h
+        src/device/BluezDiscoverySession.cpp src/device/BluezDiscoverySession.h
+        src/device/BluezPairingAgent.cpp src/device/BluezPairingAgent.h)
+    target_include_directories(background_service_tests PRIVATE src)
+    target_link_libraries(background_service_tests PRIVATE Flint::Platform Qt6::SerialPort Qt6::Bluetooth)
+    target_compile_definitions(background_service_tests PRIVATE FLINT_FLARE_VERSION="${PROJECT_VERSION}"
+        FLINT_THERMOMETER_PACKAGE="${FLINT_EXAMPLES_DIR}/thermometer-service/sample.ignit")
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_compile_definitions(background_service_tests PRIVATE FLINT_BLUEZ_DBUS)
+        target_link_libraries(background_service_tests PRIVATE Qt6::DBus)
+    endif()
+    qt_add_resources(background_service_tests background_factory PREFIX "/factory"
+        BASE "${FLINT_FACTORY_DIR}" FILES ${FLINT_FACTORY})
+    add_test(NAME background_service_sessions COMMAND background_service_tests)
+    set_tests_properties(background_service_sessions PROPERTIES TIMEOUT 45)
+    add_test(NAME background_service_ui COMMAND flint_flare --smoke
+        --background-package "${FLINT_EXAMPLES_DIR}/thermometer-service/sample.ignit"
+        --capture "${CMAKE_CURRENT_BINARY_DIR}/background-services.png")
+    set_tests_properties(background_service_ui PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software" TIMEOUT 25
+        FAIL_REGULAR_EXPRESSION "Binding loop detected")
 endif()

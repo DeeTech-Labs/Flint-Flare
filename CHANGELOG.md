@@ -9,9 +9,10 @@ Application versions in `CMakeLists.txt` aim to follow
 ## [Unreleased]
 
 ### Changed
-- Require SDK development contract 0x20261113 and rebuilt packages. Pin the validated local sensor SDK revision `3c8ad11`. See [sensor integration](docs/en/sensors.md).
+- Require SDK development contract `0x20261114` and FLM3 packages with component-local budgets, permissions, capabilities and Lua sections. Pin the validated SDK revision `845590f`. See [background services](docs/en/background-services.md).
 
 ### Added
+- Explicit background service monitoring, execution/autostart permissions and start/stop/pause/resume/revoke actions through the shared Core, with metadata-only diagnostics and a virtual low-energy simulator policy.
 - Sensor availability/state catalog, explicitly enabled diagnostic leases, bounded sampling and local simulation controls through the shared SDK Core.
 - Confirmed brightness/mute policy settings, localized sensor permission labels and explicit RTC acknowledgement/partial-failure reporting.
 - Studio support for prepared FLIM v2 icons, including the image converter in the compiler bundle.
@@ -36,6 +37,7 @@ Application versions in `CMakeLists.txt` aim to follow
 - UI, catalog and timezone tests, plus Linux/macOS/Windows build checks.
 
 ### Fixed
+- Translate shared protocol errors in the selected interface language and preserve background service status messages across language changes.
 - Stop diagnostic demand when its page/window becomes inactive or transport disconnects; do not resume session telemetry after reconnect.
 - Recheck authoritative settings after a partial mutation failure while retaining the original error; never present failed grant/settings operations as successful.
 - Ignore stale permission responses after package selection or connection changes.

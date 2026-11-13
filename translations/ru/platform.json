@@ -89,7 +89,25 @@
             "Invalid device settings": "Некорректные настройки устройства",
             "Time synchronization confirmation timed out": "Не получено подтверждение синхронизации времени",
             "Invalid time status response": "Некорректный ответ о состоянии времени",
-            "Core time updated, but RTC write failed: %1": "Время Core обновлено, но запись RTC не выполнена: %1"
+            "Core time updated, but RTC write failed: %1": "Время Core обновлено, но запись RTC не выполнена: %1",
+            "State conflict": "Конфликт состояния",
+            "Done": "Готово",
+            "Invalid request": "Некорректный запрос",
+            "Invalid package": "Повреждённый пакет",
+            "Incompatible build": "Несовместимая сборка",
+            "Not supported": "Не поддерживается",
+            "Permission denied": "Доступ запрещён",
+            "User consent required": "Требуется согласие пользователя",
+            "Source unavailable": "Источник недоступен",
+            "Cancelled": "Отменено",
+            "Quota exceeded": "Превышена квота",
+            "Resources exhausted": "Недостаточно ресурсов",
+            "Storage error": "Ошибка хранения",
+            "Integrity failure": "Нарушена целостность",
+            "Invalid state": "Некорректное состояние",
+            "Stale handle": "Устаревший ресурс",
+            "Execution limit exceeded": "Превышен лимит выполнения",
+            "Protocol error": "Ошибка протокола"
         }
     }
 }

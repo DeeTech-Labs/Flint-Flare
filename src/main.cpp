@@ -1,4 +1,5 @@
 #include "localization/Localization.h"
+#include "platform_app/BackgroundServices.h"
 #include "platform_app/CompanionService.h"
 #include "platform_app/IgniteHub.h"
 #include "platform_app/PlatformClient.h"
@@ -31,6 +32,9 @@ int main(int argc, char **argv) {
     args.addVersionOption();
     args.addOption({"smoke", "Run the offline simulator/QML verification and exit."});
     args.addOption({"capture", "Save an offline UI screenshot.", "path"});
+    args.addOption({"background-package",
+        "Use a background-service package for the isolated offline UI test (requires --smoke).",
+        "path"});
     args.process(app);
     std::unique_ptr<QTemporaryDir> testPreferences;
     if (args.isSet("smoke")) {
@@ -58,6 +62,7 @@ int main(int argc, char **argv) {
     CompanionService companion(&client);
     Studio studio;
     Sensors sensors(&client);
+    BackgroundServices backgroundServices(&client);
     QQmlApplicationEngine engine;
     engine.addImageProvider("ignite", new PreviewProvider(&preview));
     engine.rootContext()->setContextProperty("client", &client);
@@ -65,11 +70,14 @@ int main(int argc, char **argv) {
     engine.rootContext()->setContextProperty("backgroundAgent", &backgroundAgent);
     QObject::connect(
         &localization, &Localization::languageChanged, &engine, &QQmlEngine::retranslate);
+    QObject::connect(&localization, &Localization::languageChanged, &backgroundServices,
+        &BackgroundServices::changed);
     engine.rootContext()->setContextProperty("hub", &hub);
     engine.rootContext()->setContextProperty("preview", &preview);
     engine.rootContext()->setContextProperty("companion", &companion);
     engine.rootContext()->setContextProperty("studio", &studio);
     engine.rootContext()->setContextProperty("sensors", &sensors);
+    engine.rootContext()->setContextProperty("backgroundServices", &backgroundServices);
     QObject::connect(
         &engine, &QQmlApplicationEngine::objectCreationFailed, &app,
         [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
@@ -81,6 +89,120 @@ int main(int argc, char **argv) {
             window->requestActivate();
         }
     });
+    if (args.isSet("smoke") && args.isSet("background-package")) {
+        auto *theme = engine.singletonInstance<QObject *>(qmlTypeId("Flint.Flare", 1, 0, "Theme"));
+        theme->setProperty("animations", false);
+        theme->setProperty("mode", 2);
+        localization.setLanguage("ru");
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0));
+        if (!window)
+            return 1;
+        window->setWidth(1320);
+        window->setHeight(1000);
+        window->setProperty("section", 4);
+        QObject::connect(&client, &PlatformClient::failure, &app, [&](const QString &message) {
+            fprintf(stderr, "Background UI: %s\n", qPrintable(message));
+            app.exit(2);
+        });
+        struct CaptureState {
+            int phase{}, grants{}, settle{};
+        };
+        const auto state = std::make_shared<CaptureState>();
+        auto *check = new QTimer(&app);
+        check->setInterval(100);
+        QObject::connect(check, &QTimer::timeout, &app, [&, state, window, theme] {
+            QVariantMap worker;
+            for (const auto &entry : backgroundServices.services()) {
+                const auto row = entry.toMap();
+                if (row.value("package") == "demo.thermometer-service" &&
+                    row.value("component") == "worker")
+                    worker = row;
+            }
+            switch (state->phase) {
+            case 0:
+                if (!client.connected() || hub.packages().empty())
+                    return;
+                state->phase = 1;
+                hub.install(QUrl::fromLocalFile(args.value("background-package")));
+                return;
+            case 1:
+                if (hub.busy() || hub.progress() != 1 || backgroundServices.busy() ||
+                    worker.empty())
+                    return;
+                state->phase = 2;
+                backgroundServices.grant(
+                    "demo.thermometer-service", "app.background.execute", true);
+                return;
+            case 2:
+                if (backgroundServices.busy() || !worker.value("executeGranted").toBool())
+                    return;
+                state->phase = 3;
+                for (const auto &permission : {"sensors.temperature", "sensors.humidity"}) {
+                    flint::Writer w;
+                    w.text("demo.thermometer-service");
+                    w.text(permission);
+                    w.text("");
+                    w.n(1, 1);
+                    client.request(flint::Method::permission_set, std::move(w.data),
+                        [&, state](auto error, auto) {
+                            if (error != flint::Error::ok) {
+                                app.exit(3);
+                                return;
+                            }
+                            ++state->grants;
+                        });
+                }
+                return;
+            case 3:
+                if (state->grants != 2 || backgroundServices.busy())
+                    return;
+                state->phase = 4;
+                backgroundServices.control(0, "demo.thermometer-service", "worker");
+                return;
+            case 4:
+                if (backgroundServices.busy() || worker.value("state").toInt() != 2 ||
+                    worker.value("callbacks").toULongLong() == 0)
+                    return;
+                state->phase = 5;
+                state->settle = 0;
+                return;
+            case 5:
+                if (++state->settle < 4)
+                    return;
+                if (args.isSet("capture") && !window->grabWindow().save(args.value("capture"))) {
+                    app.exit(4);
+                    return;
+                }
+                state->phase = 6;
+                state->settle = 0;
+                window->setWidth(540);
+                theme->setProperty("mode", 1);
+                localization.setLanguage("en");
+                sensors.refresh();
+                return;
+            case 6:
+                if (++state->settle < 4)
+                    return;
+                if (args.isSet("capture") &&
+                    !window->grabWindow().save(args.value("capture") + ".narrow.png")) {
+                    app.exit(4);
+                    return;
+                }
+                printf("Background service panel: actual running Core service, wide RU and narrow "
+                       "EN layouts passed\n");
+                app.exit(0);
+                return;
+            }
+        });
+        check->start();
+        QTimer::singleShot(0, &client, &PlatformClient::startSimulator);
+        QTimer::singleShot(20000, &app, [&, state] {
+            fprintf(stderr, "Background UI timeout: phase=%d, hub=%s, services=%s\n", state->phase,
+                qPrintable(hub.message()), qPrintable(backgroundServices.message()));
+            app.exit(5);
+        });
+        return app.exec();
+    }
     if (args.isSet("smoke")) {
         // Keep layout captures deterministic and exercise the reduced-motion path.
         auto *theme = engine.singletonInstance<QObject *>(qmlTypeId("Flint.Flare", 1, 0, "Theme"));

@@ -38,7 +38,9 @@
             "Humidity": "Humidity",
             "Battery and power status": "Battery and power status",
             "Audio playback": "Audio playback",
-            "Display brightness": "Display brightness"
+            "Display brightness": "Display brightness",
+            "Background execution": "Background execution",
+            "Start automatically": "Start automatically"
         }
     }
 }

@@ -19,6 +19,10 @@ IgniteHub::IgniteHub(PlatformClient *client) : client_(client) {
     });
 }
 QString IgniteHub::permissionLabel(const QString &name) const {
+    if (name == QLatin1String("app.background.execute"))
+        return tr("Background execution");
+    if (name == QLatin1String("app.background.autostart"))
+        return tr("Start automatically");
     if (name == QLatin1String("sensors.motion"))
         return tr("Motion sensor");
     if (name == QLatin1String("sensors.ambient_light"))

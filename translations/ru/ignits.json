@@ -38,7 +38,9 @@
             "Humidity": "Влажность",
             "Battery and power status": "Состояние батареи и питания",
             "Audio playback": "Воспроизведение звука",
-            "Display brightness": "Яркость дисплея"
+            "Display brightness": "Яркость дисплея",
+            "Background execution": "Фоновое выполнение",
+            "Start automatically": "Автоматический запуск"
         }
     }
 }
