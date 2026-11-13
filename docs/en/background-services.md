@@ -16,7 +16,7 @@ The SDK example `examples/thermometer-service/project.json` contains independent
 
 ## Build and checks
 
-This integration requires SDK development contract `0x20261115` and rebuilt FLM3 packages with explicit component-local budget, capabilities, permissions and logic. Root-level legacy fields are rejected. Flare pins the validated SDK commit `56292d7f49315522c5789b679543ef231937620f` in `platform/`. Initialize the checked-in submodule and use the normal default:
+This integration requires SDK development contract `0x20261115` and rebuilt FLM3 packages with explicit component-local budget, capabilities, permissions and logic. Root-level legacy fields are rejected. Flare pins the validated SDK commit `8d53e1b4677bbb5575992c4daaadc0abc5468989` in `platform/`. Initialize the checked-in submodule and use the normal default:
 
 ```powershell
 git submodule update --init --recursive

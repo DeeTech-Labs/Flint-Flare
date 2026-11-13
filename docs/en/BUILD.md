@@ -23,7 +23,7 @@ ctest --test-dir build/docs-flare -C Debug --output-on-failure
 Replace the kit path or omit it for system Qt. Windows Developer PowerShell/MSVC executable:
 build/docs-flare/Debug/flint_flare.exe; Windows Ninja/MinGW: build/docs-flare/flint_flare.exe; Linux: build/docs-flare/flint_flare; macOS single-config: build/docs-flare/flint_flare.app/Contents/MacOS/flint_flare.
 Add -G Ninja only on first configure; never mix generators in one tree. Success includes the
-window and 100% tests passed, not compilation alone. Pin56292d7/contract0x20261115/FLM3 uses
+window and 100% tests passed, not compilation alone. Pin8d53e1b/contract0x20261115/FLM3 uses
 platform/. Clear stale overrides with FLINT_PLATFORM_DIR=<Flare checkout>/platform. The pinned SHA is published on SDK main; never replace it with latest.
 Generated registries/factory/examples live under build/.../platform/generated, not source snapshots.
 

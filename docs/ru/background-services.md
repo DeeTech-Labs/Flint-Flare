@@ -16,7 +16,7 @@ Diagnostics показывает установленные service components �
 
 ## Сборка и проверки
 
-Интеграция требует development contract SDK `0x20261115` и пересобранные пакеты FLM3 с явными budget, capabilities, permissions и logic каждого component. Старые root-поля отклоняются. Во Flare закреплён проверенный SDK commit `56292d7f49315522c5789b679543ef231937620f` в `platform/`. Инициализируйте submodule и используйте обычную конфигурацию по умолчанию:
+Интеграция требует development contract SDK `0x20261115` и пересобранные пакеты FLM3 с явными budget, capabilities, permissions и logic каждого component. Старые root-поля отклоняются. Во Flare закреплён проверенный SDK commit `8d53e1b4677bbb5575992c4daaadc0abc5468989` в `platform/`. Инициализируйте submodule и используйте обычную конфигурацию по умолчанию:
 
 ```powershell
 git submodule update --init --recursive

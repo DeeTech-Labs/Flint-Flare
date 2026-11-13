@@ -9,9 +9,10 @@ Application versions in `CMakeLists.txt` aim to follow
 ## [Unreleased]
 
 ### Changed
+- Pin the SDK fix that refreshes dispatch time after autostart loading, preventing an immediate invalid_state fault on advancing real clocks; stopped instances report zero current memory.
 - Integrate optional SDK text boxes and explicit system/example layouts with development contract `0x20261115`; rebuild matching firmware, desktop tools and packages together. Unbounded text remains available to application authors.
 - Refresh RU/EN onboarding, build/test/contributor routes, user recovery and extension guides against the implemented shared SDK contract.
-- Require SDK development contract `0x20261115` and FLM3 packages with component-local budgets, permissions, capabilities and Lua sections. Pin the validated SDK revision `56292d7`. See [background services](docs/en/background-services.md).
+- Require SDK development contract `0x20261115` and FLM3 packages with component-local budgets, permissions, capabilities and Lua sections. Pin the validated SDK revision `8d53e1b`. See [background services](docs/en/background-services.md).
 
 ### Added
 - Explicit background service monitoring, execution/autostart permissions and start/stop/pause/resume/revoke actions through the shared Core, with metadata-only diagnostics and a virtual low-energy simulator policy.
