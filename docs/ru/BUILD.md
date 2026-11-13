@@ -1,33 +1,72 @@
-[English translation](../en/BUILD.md)
+# Сборка и проверка Flare
 
-# Сборка Flare
+[Оглавление](INDEX.md) · [English](../en/BUILD.md) · [Пользование](USER-GUIDE.md) · [Разработка](DEVELOPMENT.md)
 
-Зависимости Qt и обычные команды CMake описаны в [README](../../README.md). CTest проверяет переносимый Runtime и настоящее приложение QML с временным автономным симулятором.
+## Инструменты
 
-`flint_flare --smoke --capture /tmp/flare.png` также сохраняет снимки вкладки «Мои часы»: `/tmp/flare.png.watch.png`, `/tmp/flare.png.watch-narrow.png`, `/tmp/flare.png.watch-empty.png` и `/tmp/flare.png.watch-empty-narrow.png`. Проверяются раскрытие настроек, удаление сведений после отключения и переход к подключению на ширине 540 и 1320 пикселей. Аппаратные USB/BLE-соединения этой проверкой не покрываются. Для запуска без дисплея задайте `QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software`.
+Git, CMake3.21+, C/C++20, Qt6.5+ с Quick/Quick Controls/Quick Dialogs, SerialPort,
+Bluetooth, Widgets, ShaderTools; на Linux также QtDBus. Установите соответствующие
+development modules в своём Qt kit. Не смешивайте Qt MinGW с MSVC или разные architectures.
+CI настроен на Qt6.10.2/Linux/macOS/Windows; текущие локальные проверки выполнены на
+Windows Qt6.12 MinGW15.1. Это не подтверждение физического транспорта на всех ОС.
 
-`platform/` — подмодуль [Flint IgniteSDK](https://github.com/DeeTech-Labs/Flint-IgniteSDK), закреплённый на коммите. Клонируйте с `--recurse-submodules` или выполните `git submodule update --init --recursive` перед конфигурацией. Общие изменения вносятся в SDK и подключаются обновлением ссылки подмодуля. Копирования и экспорта исходников нет.
+Python3.11+ и Pillow нужны **до CMake configure**: общий SDK генерирует factory assets
+даже без tests. CairoSVG/system Cairo нужны только для SVG conversion. Lua включена в SDK.
+Активируйте окружение Qt/compiler и Python перед запуском Studio: он ищет Python в PATH.
 
-Локальный Ignite собирается командой `python3 platform/tools/compile_ignite.py project.json output.ignit` или через Ignite Studio. Для исходных шрифтов и изображений нужен Pillow. Компилятор проверяет пути ресурсов относительно выбранного каталога проекта.
+## Сборка из текущего checkout
 
-Отступ — четыре пробела. Формат задают `.editorconfig` и `.clang-format`. Иконки, общие компоненты QML, шрифты и шейдеры сохраняются как библиотека визуальных ресурсов.
+Из корня Flare, после `git status`/`git submodule status`:
 
-## Application API 1
+```sh
+git submodule update --init --recursive
+python -m pip install Pillow
+cmake -S . -B build/docs-flare -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=/path/to/Qt/kit
+cmake --build build/docs-flare --config Debug --parallel 2
+ctest --test-dir build/docs-flare -C Debug --output-on-failure
+```
 
-SDK `0x20261114` закреплён локальным commit `845590f` в `platform/`; обычная сборка использует этот submodule. Новые Lua-проекты указывают `"app_api": 1` внутри выбранного `components[]`; компилятор добавляет capability 128. Контракт `0x20261114` использует FLM3/FLIM v2 и требует пересборки пакетов. Factory-пакеты и примеры для Qt resources берутся из `build/.../platform/generated/`, а не из снимков в исходниках.
+Замените `/path/to/Qt/kit` реальным kit, либо опустите prefix при system Qt. В Windows
+Developer PowerShell/MSVC executable — `build/docs-flare/Debug/flint_flare.exe`. Для Windows Ninja/MinGW — `build/docs-flare/flint_flare.exe`, Linux — `build/docs-flare/flint_flare`, macOS single-config — `build/docs-flare/flint_flare.app/Contents/MacOS/flint_flare`. Для Ninja добавьте `-G Ninja`
+при первом configure. Не меняйте generator/compiler в существующем build.
+Успех — запуск окна и `100% tests passed`, а не только скомпилированный executable.
 
-Локальный симулятор вызывает Core по `nextWake()` и перерисовывает Preview по изменениям сцены. На изображении симулятора доступны нажатие/отпускание/удержание мыши, Пробел/Enter, стрелки вверх/вниз и колесо мыши. Ввод проходит через `Core::postInput`, декларацию input.focused и генерацию Runtime; после переключения приложения устаревшее отпускание не доставляется новому запуску. Скрытый Preview теряет фокус, но не останавливает саму симулируемую активную программу. Ввод в физические часы по Companion не добавлен.
+SDK pin845590f / contract0x20261114 / FLM3; обычный путь — platform/. Если cache содержал
+sibling override, задайте `-DFLINT_PLATFORM_DIR=<Flare checkout>/platform`. Локальный SHA
+может отсутствовать в remote, пока не опубликован: получите matching SDK checkout/bundle
+у сопровождающего, не меняйте pin на latest. Локальная инициализация при предоставленном
+SDK: `git -c submodule.platform.url=<путь-к-SDK> submodule update --init platform`.
+Generated registries/factory/examples находятся в build/.../platform/generated, source
+snapshots не используются вместо генерации. Старые root manifest fields не поддерживаются.
 
-Приватное состояние живёт в хранилище Core на протяжении сеанса симулятора; запуск нового симулятора создаёт новое временное хранилище. Показаний физической батареи симулятор не создаёт. Удалённый Preview использует сцены часов и проверенные ресурсы пакета без повторного исполнения его Lua на компьютере. Для проверки счётчика соберите `platform/examples/counter/project.json` через Studio и установите пакет в симулятор.
+## Offline и UI-проверки
 
-CTest `preview_application_api` проверяет настоящий Qt-таймер, ввод Preview, сохранение счётчика с отложенной записью, повторный запуск, устаревшую генерацию и отключение. Тест включён при BUILD_TESTING и FLINT_ENABLE_LUA, не подключается к физическим устройствам.
+CTest desktop_offline запускает настоящее QML приложение с временным Simulator, без
+подключения USB/BLE. Для ручного smoke/capture задайте `QT_QPA_PLATFORM=offscreen` и
+`QT_QUICK_BACKEND=software` (в PowerShell `$env:ИМЯ='значение'`), затем:
 
-Smoke также проверяет границы подписи превью, доступные имена навигации, блокировку повторного нажатия синхронизации и переход из обзора к выбору приложения в разрешениях. Для воспроизводимости при проверке раскладки движение отключено: широкий проход использует русскую тёмную тему, узкий — английскую светлую. При `--capture` сохраняются дополнительные снимки `.overview.png` и `.overview-narrow.png`. `companion_sessions` покрывает ожидание и подтверждение синхронизации, отказ, повторный запрос, timeout, отключение, устаревший ответ и автосинхронизацию нового сеанса.
+```sh
+build/docs-flare/flint_flare --smoke --capture build/docs-flare/flare.png
+```
 
-Регрессионные проверки также покрывают A → B → A в выборе разрешений, устаревший результат выдачи доступа, удалённый пакет, закрытие согласия при смене приложения и отключении, видимость установки во вкладке разрешений и закрытие сессии из обработчика уведомления синхронизации.
+Для Visual Studio добавьте Debug/ и .exe в путь; для macOS используйте bundle executable, указанный выше. Создаются дополнительные `.watch.png`,
+`.watch-narrow.png`, `.overview.png`, `.overview-narrow.png` и другие состояния рядом с PNG.
+background_service_ui устанавливает реальный thermometer-service в simulator и сохраняет
+wide RU/narrow EN capture. Это не mock layout с нарисованными строками и не physical test.
+`ctest -N` перечисляет targets; `-R background_service` выбирает service controller/UI.
+SDK tests включены при BUILD_TESTING; FLINT_ENABLE_LUA влияет на Lua tests.
 
-В конце smoke проверяется таймер фона hero: при доступном GPU и активном окне фаза должна изменяться; выключение анимаций останавливает таймер. Software rendering проверяет неподвижный fallback. Сообщение `Binding loop detected` делает `desktop_offline` неуспешным.
+## Compiler и Preview
 
-## Ресурсы иконок Ignite
+Studio вызывает общий compile_ignite.py из SDK resources отдельным Python subprocess.
+Для CLI: `python platform/tools/compile_ignite.py platform/examples/counter/project.json
+build/docs-flare/counter.ignit`. Проверяйте пакет также ignite-check из SDK build.
+Simulator исполняет тот же Core по nextWake, хранит private data в session temp directory,
+не выдумывает физическую батарею и помечает sensor samples simulation. Закрытие/новый
+simulator session не является проверкой durable reboot физической Flash.
+Remote Preview показывает scene устройства, без второй копии его Lua. Локальный Preview
+передаёт мышь/клавиши/колесо через focus/input generation; remote input не добавлен.
+[API/examples](https://github.com/DeeTech-Labs/Flint-IgniteSDK/blob/main/docs/ru/APP-QUICKSTART.md).
 
-Studio включает общий конвертер `compile_ignite.py`, `build_package.py`, `flim.py`. Для растров нужен Pillow в запускаемом Python; для SVG дополнительно CairoSVG и системный Cairo. Изображения готовятся на компьютере. Контракт FLM3/FLIM v2 (`0x20261114`) требует пересборки пакетов и общего SDK; старые ревизии отклоняются. До закрепления коммита SDK можно явно использовать `-DFLINT_PLATFORM_DIR=F:/Project/FlintEcosystem/Flint-IgniteSDK` (путь к вашему checkout). По умолчанию выбирается submodule; старый контракт отклоняется CMake. См. [датчики](sensors.md).
+Build/test/temp artifacts только в owning build/ и temp/. Для отдельно собираемого SDK
+submodule используйте platform/build/. [Матрица проверок](DEVELOPMENT.md).

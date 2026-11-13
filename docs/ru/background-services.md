@@ -21,8 +21,8 @@ Diagnostics показывает установленные service components �
 ```powershell
 git submodule update --init --recursive
 cmake -S . -B build/background-services
-cmake --build build/background-services
-ctest --test-dir build/background-services --output-on-failure
+cmake --build build/background-services --config Debug
+ctest --test-dir build/background-services --output-on-failure -C Debug
 ```
 
 Используйте обычное окружение Qt/compiler; relocated SDK tests также требуют нужные generator/compiler в окружении. `background_service_sessions` проверяет установку реального пакета, явные разрешения, независимость foreground/service, прекращение скрытого мониторинга, energy/manual pause, флаги автозапуска и отзыв выполнения через Core. Физический admission ресурсов, battery policy, USB/BLE disconnect, reboot/прерывание питания и визуальная компоновка требуют отдельных аппаратных/ручных проверок. Выигрыши задержек, энергопотребления и RAM не заявляются.

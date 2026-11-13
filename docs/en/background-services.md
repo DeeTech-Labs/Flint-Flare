@@ -21,8 +21,8 @@ This integration requires SDK development contract `0x20261114` and rebuilt FLM3
 ```powershell
 git submodule update --init --recursive
 cmake -S . -B build/background-services
-cmake --build build/background-services
-ctest --test-dir build/background-services --output-on-failure
+cmake --build build/background-services --config Debug
+ctest --test-dir build/background-services --output-on-failure -C Debug
 ```
 
 Use the normal Qt/compiler environment; relocated SDK tests also need the intended generator/compiler in the environment. `background_service_sessions` exercises actual package installation, explicit grants, foreground/service independence, hidden monitoring, low-energy/manual pause, automatic-start flags and execution revocation through Core. Physical resource admission, battery policy, USB/BLE unplug behavior, reboot/power interruption and GUI layout need separate device/manual verification. No latency, power or RAM savings are claimed.

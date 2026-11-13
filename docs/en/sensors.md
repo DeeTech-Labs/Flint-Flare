@@ -13,9 +13,9 @@ Time synchronization acknowledges Core persistence and then polls `time_status` 
 Integration uses SDK ContractRevision0x20261114, local commit `845590f` pinned in `platform/`. Normal builds use the submodule; FLINT_PLATFORM_DIR remains an explicit development override.
 
 ```powershell
-cmake -S . -B build/sensors -DFLINT_PLATFORM_DIR=F:/Project/FlintEcosystem/Flint-IgniteSDK
-cmake --build build/sensors
-ctest --test-dir build/sensors --output-on-failure
+cmake -S . -B build/sensors
+cmake --build build/sensors --config Debug
+ctest --test-dir build/sensors --output-on-failure -C Debug
 ```
 
 Use the normal Qt/compiler environment for the platform. `sensor_sessions` covers simulator catalog/no default demand, diagnostic start/stop/expiry/disconnect, virtual states and values, and time confirmation/error handling. Physical sensors, USB/BLE behavior, RTC, backlight/audio output, power interruption and GUI layout need separate hardware/manual validation. No RAM, latency, power or accuracy guarantees are claimed.

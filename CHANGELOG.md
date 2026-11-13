@@ -9,6 +9,7 @@ Application versions in `CMakeLists.txt` aim to follow
 ## [Unreleased]
 
 ### Changed
+- Refresh RU/EN onboarding, build/test/contributor routes, user recovery and extension guides against the implemented shared SDK contract.
 - Require SDK development contract `0x20261114` and FLM3 packages with component-local budgets, permissions, capabilities and Lua sections. Pin the validated SDK revision `845590f`. See [background services](docs/en/background-services.md).
 
 ### Added

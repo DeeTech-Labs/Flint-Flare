@@ -13,9 +13,9 @@ Flare получает данные датчиков через общий Core 
 Интеграция использует SDK `ContractRevision=0x20261114`, локальный commit `845590f`, закреплённый в `platform/`. Обычная сборка использует submodule; FLINT_PLATFORM_DIR остаётся явным override для разработки.
 
 ```powershell
-cmake -S . -B build/sensors -DFLINT_PLATFORM_DIR=F:/Project/FlintEcosystem/Flint-IgniteSDK
-cmake --build build/sensors
-ctest --test-dir build/sensors --output-on-failure
+cmake -S . -B build/sensors
+cmake --build build/sensors --config Debug
+ctest --test-dir build/sensors --output-on-failure -C Debug
 ```
 
 Используйте обычное окружение Qt/compiler для своей платформы. `sensor_sessions` проверяет каталог simulator без автоматического измерения, запуск/остановку/истечение доступа/disconnect, виртуальные состояния и значения, подтверждение времени и ошибки. Физические датчики, USB/BLE, RTC, подсветка/звук, прерывание питания и визуальная компоновка требуют отдельных аппаратных и ручных проверок. Гарантии RAM, задержек, энергопотребления и точности не заявляются.
