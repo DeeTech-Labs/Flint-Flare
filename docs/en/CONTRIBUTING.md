@@ -21,8 +21,8 @@ a C++20 compiler and Python 3/Pillow for compiler and integration tests. See [BU
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
+cmake --build build --parallel --config Debug
+ctest --test-dir build --output-on-failure -C Debug
 ```
 
 Tests use the shared Core and a disposable offline simulator; they do not need physical hardware.
@@ -70,3 +70,17 @@ Participation follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 ## Documentation and contribution terms
 
 Russian is canonical; update Russian documentation and its English translation together. Authors retain copyright. Contributions use the applicable component license; they do not imply assignment or unrestricted commercial relicensing. See [licensing scope](LICENSING.md).
+
+## A small change
+
+Start with [build](BUILD.md), Simulator and [controller map](DEVELOPMENT.md), not all formats.
+Pillow must exist before configure; Linux needs QtDBus. Use one Qt/compiler kit, --config/-C
+Debug for Visual Studio. Artifacts only under owning build/temp; independent SDK platform/build.
+Baseline: diff/build/CTest/RU/EN/links. QML: desktop_offline+captures; sessions: companion_sessions;
+Preview: preview_application_api; Studio: studio_icon_resources; sensors: sensor_sessions;
+services: background_service_sessions/background_service_ui. ctest -N lists actual configured
+names. Shared contracts require owning SDK tests and OS consumer build, never duplication.
+New data sources cannot sample merely on authentication. Report OS/kit/transport/revisions,
+safe minimal reproduction, expected/actual; no private data/keys. PR includes behavior,
+migration/security, executed commands, UI captures, Unreleased notes and unverified hardware.
+Simulator tests do not prove physical BLE/USB/power-loss/battery behavior.

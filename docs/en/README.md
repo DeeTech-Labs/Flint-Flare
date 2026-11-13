@@ -52,20 +52,24 @@ capabilities drive the connection, so the client can support future models.
 
 Ignite Hub installs binary packages with resumable transfer, launches components, selects clock/theme/language providers, and manages application permissions. Studio compiles local projects; Preview and the disposable simulator use the same portable runtime as FlinT OS.
 
-The existing QML shell, theme, icons, fonts, effects, localization and tray integration are retained. Bounded Lua runs in the simulator and validated Spark firmware. Firmware updates, background services and additional host integrations remain future work; see the [shared implementation specification](../../platform/README.md). Linux builds are verified locally; Windows/macOS remain CI targets rather than locally validated packages.
+The existing QML shell, theme, icons, fonts, effects, localization and tray integration are retained. Bounded Lua runs in the simulator and validated Spark firmware. Firmware updating is not implemented in Flare; background services use the shared Core with explicit grants/model limits; see the [shared implementation specification](../../platform/README.md). This revision was locally built/tested on Windows Qt6.12 MinGW; other OS and physical transport validation are separate.
 
 ---
 
 ## Quick start
 
-**Requirements:** Qt 6.5+ with Quick, Quick Controls, Quick Dialogs, Serial Port, Bluetooth, Widgets and Shader Tools;
+[User guide](USER-GUIDE.md) · [Audience index](INDEX.md) · [Developer guide](DEVELOPMENT.md).
+
+**Requirements:** Qt 6.5+ with Quick, Quick Controls, Quick Dialogs, Serial Port, Bluetooth, Widgets and Shader Tools (Linux also DBus);
 CMake 3.21+; a C++20 compiler. Python 3 and Pillow support the project compiler and integration tests.
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --parallel
-./build/flint_flare
+cmake --build build --config Debug --parallel 2
+./build/Debug/flint_flare.exe # Windows Visual Studio
 ```
+
+Windows Ninja/MinGW uses build/flint_flare.exe; Linux build/flint_flare; macOS single-config build/flint_flare.app/Contents/MacOS/flint_flare.
 
 For a non-system Qt installation, pass `-DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/gcc_64`.
 In Qt Creator, open `CMakeLists.txt` and select a Qt6 kit. Platform-specific notes:
@@ -87,8 +91,8 @@ CPU/RAM sharing requires both the active Ignite's scoped permission and Flare's 
 <summary><b>Offline verification</b></summary>
 
 ```bash
-ctest --test-dir build --output-on-failure
-QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software ./build/flint_flare --smoke
+ctest --test-dir build --output-on-failure -C Debug
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software ./build/Debug/flint_flare.exe # Visual Studio; Ninja/Linux/macOS: ./build/flint_flare --smoke
 ```
 
 The smoke test loads the actual QML application and a disposable local simulator. It does not scan for or connect to USB/BLE devices.

@@ -33,6 +33,7 @@ public:
     QString message() const {
         return message_;
     }
+    Q_INVOKABLE QString permissionLabel(const QString &name) const;
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void select(const QString &id);
     Q_INVOKABLE void install(const QUrl &path);

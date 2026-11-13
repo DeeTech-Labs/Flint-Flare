@@ -19,3 +19,5 @@ Community conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 ## Documentation and contribution terms
 
 Russian is canonical; update Russian documentation and its English translation together. Authors retain copyright. Contributions use the applicable component license; they do not imply assignment or unrestricted commercial relicensing. See [licensing scope](LICENSING.md).
+
+Before filing an issue use the [symptom checklist](USER-GUIDE.md). Host/simulator tests do not establish physical hardware behavior.

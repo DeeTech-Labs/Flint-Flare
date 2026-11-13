@@ -6,6 +6,11 @@ import Flint.Flare
 
 AppPage {
     id: page
+    function permissionLabel(name) {
+        // Track language changes for labels translated by the C++ backend.
+        const language = localization.language;
+        return hub.permissionLabel(name);
+    }
     property alias currentTab: tabs.currentIndex
     positionKey: String(currentTab)
     SectionTabs {
@@ -74,7 +79,7 @@ AppPage {
         property bool enable
         standardButtons: Dialog.Ok | Dialog.Cancel
         contentItem: Label {
-            text: consent.packageId + "\n" + consent.permissionName + "\n" + (consent.scopeName || qsTr("Own data")) + "\n\n" + (consent.enable ? qsTr("Allow this access? You can revoke it here.") : qsTr("Revoke this access?"))
+            text: consent.packageId + "\n" + page.permissionLabel(consent.permissionName) + "\n" + (consent.scopeName || qsTr("Own data")) + "\n\n" + (consent.enable ? qsTr("Allow this access? You can revoke it here.") : qsTr("Revoke this access?"))
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
         }
@@ -240,7 +245,7 @@ AppPage {
                     required property var modelData
                     Layout.fillWidth: true
                     Caption {
-                        text: modelData.name + (modelData.scope ? " · " + modelData.scope : "")
+                        text: page.permissionLabel(modelData.name) + (modelData.scope ? " · " + modelData.scope : "")
                         Layout.fillWidth: true
                     }
                     Caption {

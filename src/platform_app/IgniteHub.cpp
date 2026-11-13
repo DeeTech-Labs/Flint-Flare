@@ -18,6 +18,29 @@ IgniteHub::IgniteHub(PlatformClient *client) : client_(client) {
         emit changed();
     });
 }
+QString IgniteHub::permissionLabel(const QString &name) const {
+    if (name == QLatin1String("app.background.execute"))
+        return tr("Background execution");
+    if (name == QLatin1String("app.background.autostart"))
+        return tr("Start automatically");
+    if (name == QLatin1String("sensors.motion"))
+        return tr("Motion sensor");
+    if (name == QLatin1String("sensors.ambient_light"))
+        return tr("Ambient light");
+    if (name == QLatin1String("sensors.temperature"))
+        return tr("Temperature");
+    if (name == QLatin1String("sensors.pressure"))
+        return tr("Atmospheric pressure");
+    if (name == QLatin1String("sensors.humidity"))
+        return tr("Humidity");
+    if (name == QLatin1String("system.power.status"))
+        return tr("Battery and power status");
+    if (name == QLatin1String("audio.play"))
+        return tr("Audio playback");
+    if (name == QLatin1String("ui.brightness"))
+        return tr("Display brightness");
+    return name;
+}
 void IgniteHub::result(flint::Error e) {
     busy_ = false;
     message_ = platformError(e);
@@ -155,7 +178,8 @@ void IgniteHub::grant(const QString &name, const QString &scope, bool enabled) {
         if (generation != permissionRequest_)
             return;
         permissionsMessage_ = platformError(e);
-        permissionsRefresh();
+        if (e == flint::Error::ok)
+            permissionsRefresh();
         emit changed();
     });
 }

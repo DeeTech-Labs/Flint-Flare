@@ -31,17 +31,17 @@
 
 ## Быстрый старт
 
-Нужны Qt 6.5+ с Quick, Quick Controls, Quick Dialogs, Serial Port, Bluetooth, Widgets и Shader Tools; CMake 3.21+, компилятор C++20, Python 3 и Pillow для компилятора ресурсов и интеграционных тестов. Команды из корня репозитория:
+Нужны Qt 6.5+ с Quick, Quick Controls, Quick Dialogs, Serial Port, Bluetooth, Widgets и Shader Tools (на Linux также DBus); CMake 3.21+, компилятор C++20, Python 3 и Pillow для компилятора ресурсов и интеграционных тестов. Команды из корня репозитория:
 
 ```sh
 git submodule update --init --recursive
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --parallel
-./build/flint_flare
-ctest --test-dir build --output-on-failure
+cmake --build build --config Debug --parallel 2
+./build/Debug/flint_flare.exe # Windows Visual Studio
+ctest --test-dir build -C Debug --output-on-failure
 ```
 
-Для несистемной Qt передайте `-DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/gcc_64`. Тест запускает настоящее приложение QML с временным автономным симулятором, без поиска или подключения USB/BLE-устройств. Подробности: [сборка](docs/ru/BUILD.md).
+Для несистемной Qt передайте `-DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/gcc_64`. Путь запуска: Windows Visual Studio — build/Debug/flint_flare.exe; Windows Ninja/MinGW — build/flint_flare.exe; Linux — build/flint_flare; macOS — build/flint_flare.app/Contents/MacOS/flint_flare (single-config). Используйте один Qt/compiler kit. Тест запускает настоящее приложение QML с временным автономным симулятором, без поиска или подключения USB/BLE-устройств. Подробности: [сборка](docs/ru/BUILD.md).
 
 ## Подключение устройства
 
@@ -53,7 +53,7 @@ ctest --test-dir build --output-on-failure
 
 ## Текущий статус
 
-Локально проверена сборка Linux; Windows и macOS проверяются в CI. Обновление прошивки, фоновые службы и дополнительные интеграции компьютера пока не реализованы.
+Для этой ревизии выполнены Windows/Qt 6.12 MinGW build, CTest и UI captures; это не подтверждение всех ОС или физических USB/BLE. Фоновые службы управляются через Diagnostics и общий Core. Flare не реализует установщик firmware: обновление выполняется инструментами OS/ESP-IDF. Реестр интеграций не означает наличие их backend.
 
 ## Устройство проекта
 
@@ -62,6 +62,8 @@ ctest --test-dir build --output-on-failure
 `platform/` — [Flint IgniteSDK](https://github.com/DeeTech-Labs/Flint-IgniteSDK) на закреплённом коммите. SDK содержит общие Core, Runtime, компилятор и контракты; копий исходников нет. Изменения в общей реализации вносятся в SDK, затем обновляется ссылка подмодуля.
 
 ## Документация
+
+[Начальная настройка и ежедневные операции](docs/ru/USER-GUIDE.md) · [Оглавление](docs/ru/INDEX.md) · [Расширение Flare](docs/ru/DEVELOPMENT.md).
 
 - [Логотип и иконки приложения](docs/ru/BRANDING.md).
 

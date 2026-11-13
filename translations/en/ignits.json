@@ -30,7 +30,17 @@
             "Cannot read Ignit (limit 4 KB)": "Cannot read Ignit (limit 4 KB)"
         },
         "IgniteHub": {
-            "Verifying and activating package…": "Verifying and activating package…"
+            "Verifying and activating package…": "Verifying and activating package…",
+            "Motion sensor": "Motion sensor",
+            "Ambient light": "Ambient light",
+            "Temperature": "Temperature",
+            "Atmospheric pressure": "Atmospheric pressure",
+            "Humidity": "Humidity",
+            "Battery and power status": "Battery and power status",
+            "Audio playback": "Audio playback",
+            "Display brightness": "Display brightness",
+            "Background execution": "Background execution",
+            "Start automatically": "Start automatically"
         }
     }
 }
