@@ -31,11 +31,8 @@ Developer PowerShell/MSVC executable — `build/docs-flare/Debug/flint_flare.exe
 при первом configure. Не меняйте generator/compiler в существующем build.
 Успех — запуск окна и `100% tests passed`, а не только скомпилированный executable.
 
-SDK pin845590f / contract0x20261114 / FLM3; обычный путь — platform/. Если cache содержал
-sibling override, задайте `-DFLINT_PLATFORM_DIR=<Flare checkout>/platform`. Локальный SHA
-может отсутствовать в remote, пока не опубликован: получите matching SDK checkout/bundle
-у сопровождающего, не меняйте pin на latest. Локальная инициализация при предоставленном
-SDK: `git -c submodule.platform.url=<путь-к-SDK> submodule update --init platform`.
+SDK pin6e7a853 / contract0x20261114 / FLM3; обычный путь — platform/. Если cache содержал
+sibling override, задайте `-DFLINT_PLATFORM_DIR=<Flare checkout>/platform`. Закреплённый SHA опубликован в main SDK; не заменяйте pin на latest.
 Generated registries/factory/examples находятся в build/.../platform/generated, source
 snapshots не используются вместо генерации. Старые root manifest fields не поддерживаются.
 

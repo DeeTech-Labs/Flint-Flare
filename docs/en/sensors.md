@@ -10,7 +10,7 @@ Time synchronization acknowledges Core persistence and then polls `time_status` 
 
 ## Build and validation
 
-Integration uses SDK ContractRevision0x20261114, local commit `845590f` pinned in `platform/`. Normal builds use the submodule; FLINT_PLATFORM_DIR remains an explicit development override.
+Integration uses SDK ContractRevision0x20261114, commit `6e7a853` pinned in `platform/`. Normal builds use the submodule; FLINT_PLATFORM_DIR remains an explicit development override.
 
 ```powershell
 cmake -S . -B build/sensors
@@ -22,4 +22,4 @@ Use the normal Qt/compiler environment for the platform. `sensor_sessions` cover
 
 ## SDK revision
 
-The sensor SDK is pinned to local commit `845590f` in `platform/`. Normal builds use this submodule; an external FLINT_PLATFORM_DIR is only needed for deliberate SDK development.
+The sensor SDK is pinned to commit `6e7a853` in `platform/`. Normal builds use this submodule; an external FLINT_PLATFORM_DIR is only needed for deliberate SDK development.
