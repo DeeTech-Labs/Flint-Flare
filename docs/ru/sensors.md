@@ -10,7 +10,7 @@ Flare получает данные датчиков через общий Core 
 
 ## Сборка и проверки
 
-Интеграция использует SDK `ContractRevision=0x20261114`, commit `6e7a853`, закреплённый в `platform/`. Обычная сборка использует submodule; FLINT_PLATFORM_DIR остаётся явным override для разработки.
+Интеграция использует SDK `ContractRevision=0x20261115`, commit `8d53e1b`, закреплённый в `platform/`. Обычная сборка использует submodule; FLINT_PLATFORM_DIR остаётся явным override для разработки.
 
 ```powershell
 cmake -S . -B build/sensors
@@ -22,4 +22,4 @@ ctest --test-dir build/sensors --output-on-failure -C Debug
 
 ## SDK revision
 
-SDK датчиков закреплён commit `6e7a853` в `platform/`. Обычная сборка использует этот submodule; внешний `FLINT_PLATFORM_DIR` нужен только при намеренной разработке нового SDK.
+SDK датчиков закреплён commit `8d53e1b` в `platform/`. Обычная сборка использует этот submodule; внешний `FLINT_PLATFORM_DIR` нужен только при намеренной разработке нового SDK.
